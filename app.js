@@ -10,14 +10,114 @@ let g = {
   queue:[], fails:[], sfails:[],
   ok:0, bad:0, idx:0, streak:0, best:0, answered:false,
   done:{}, dfails:{},
-  user:{name:'',sid:'',nick:''},
+  user:{name:'',sid:'',nick:'',cohort:'2026-1'},
   mode:'level', // 'level', 'study', 'fr', 'exam'
   studyIdx:0
 };
 const KEY='topik_vk3';
 
+// ── COHORT SYSTEM (Per-Semester Differentiation) ──
+const DEFAULT_COHORTS = [
+  { id: '2026-1', name: '2026 Spring Cohort (Current)', semester: 'Spring', year: 2026, active: true },
+  { id: '2025-2', name: '2025 Fall Cohort', semester: 'Fall', year: 2025, active: false },
+  { id: '2025-1', name: '2025 Spring Cohort', semester: 'Spring', year: 2025, active: false },
+  { id: '2024-2', name: '2024 Fall Cohort', semester: 'Fall', year: 2024, active: false },
+  { id: 'alumni', name: 'Alumni / Former Students', semester: 'Former', year: 2024, active: false }
+];
+
+function getCohorts(){
+  try {
+    const raw = localStorage.getItem('topik_cohorts');
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e){}
+  return DEFAULT_COHORTS;
+}
+
+function saveCohorts(list){
+  try { localStorage.setItem('topik_cohorts', JSON.stringify(list)); } catch(e){}
+}
+
+function getActiveCohort(){
+  const list = getCohorts();
+  return list.find(c => c.active) || list[0];
+}
+
+function populateCohortSelects(){
+  const cohorts = getCohorts();
+  const regSel = document.getElementById('reg-cohort');
+  if(regSel){
+    const prev = regSel.value;
+    regSel.innerHTML = cohorts.map(c => `
+      <option value="${c.id}" ${(prev ? prev === c.id : c.active) ? 'selected' : ''}>
+        ${c.name} ${c.active ? '★ (Current)' : ''}
+      </option>`).join('');
+  }
+  const lbSel = document.getElementById('lb-cohort-filter');
+  if(lbSel){
+    const prev = lbSel.value || 'all';
+    lbSel.innerHTML = '<option value="all">All Semesters (전체 학기)</option>' +
+      cohorts.map(c => `<option value="${c.id}" ${prev === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+  }
+  const admSel = document.getElementById('adm-student-cohort');
+  if(admSel){
+    const prev = admSel.value || 'all';
+    admSel.innerHTML = '<option value="all">All Cohorts (전체 학기)</option>' +
+      cohorts.map(c => `<option value="${c.id}" ${prev === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+  }
+}
+
+// Student record caching for offline and admin roster view
+function getCachedStudents(){
+  try {
+    const raw = localStorage.getItem('topik_students_cache');
+    if(raw) return JSON.parse(raw);
+  } catch(e){}
+  return [];
+}
+
+function saveCachedStudents(list){
+  try { localStorage.setItem('topik_students_cache', JSON.stringify(list)); } catch(e){}
+}
+
+function cacheStudentRecord(student){
+  if(!student || !student.sid) return;
+  const list = getCachedStudents();
+  const idx = list.findIndex(s => s.sid === student.sid);
+  const doneCount = Object.values(g.done||{}).filter(Boolean).length;
+  const record = {
+    sid: student.sid,
+    name: student.name || 'Student',
+    nick: student.nick || '',
+    cohort: student.cohort || getActiveCohort().id,
+    words: student.words || (g.user && g.user.sid === student.sid ? doneCount * 30 : 0),
+    levels: student.levels || (g.user && g.user.sid === student.sid ? doneCount : 0),
+    examPassed: student.examPassed || (g.user && g.user.sid === student.sid ? (localStorage.getItem('topik_exam_passed')==='1') : false),
+    examScore: student.examScore || parseInt(localStorage.getItem('topik_exam_best')||'0', 10),
+    lastSeen: new Date().toISOString()
+  };
+  if(idx >= 0){ list[idx] = { ...list[idx], ...record }; }
+  else { list.push(record); }
+  saveCachedStudents(list);
+}
+
 function save(){try{localStorage.setItem(KEY,JSON.stringify({fails:g.fails,best:g.best,done:g.done,dfails:g.dfails,user:g.user}))}catch(e){}}
-function load(){try{const d=localStorage.getItem(KEY);if(d){const s=JSON.parse(d);g.fails=s.fails||[];g.best=s.best||0;g.done=s.done||{};g.dfails=s.dfails||{};g.user=s.user||{name:'',sid:'',nick:''}}}catch(e){}}
+function load(){
+  try{
+    const d=localStorage.getItem(KEY);
+    if(d){
+      const s=JSON.parse(d);
+      g.fails=s.fails||[];
+      g.best=s.best||0;
+      g.done=s.done||{};
+      g.dfails=s.dfails||{};
+      g.user=s.user||{name:'',sid:'',nick:'',cohort:'2026-1'};
+      if(!g.user.cohort) g.user.cohort = getActiveCohort().id;
+    }
+  }catch(e){}
+}
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
 function allWords(){return Object.values(VOCAB).flat().map(bd=>bd.words).flat();}
 function levelKey(progDay,bookDay){return `${progDay}_${bookDay}`;}
@@ -235,17 +335,19 @@ function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const sid=document.getElementById('reg-id').value.trim();
   const nick=document.getElementById('reg-nick').value.trim();
+  const cohort=document.getElementById('reg-cohort')?.value || getActiveCohort().id;
   const err=document.getElementById('reg-err');
   if(!name){err.style.display='block';err.textContent='Please enter your full name.';return;}
   if(!sid){err.style.display='block';err.textContent='Please enter your student ID.';return;}
   err.style.display='none';
-  g.user={name:name.toUpperCase(),sid:sid.toUpperCase(),nick:nick};
+  g.user={name:name.toUpperCase(),sid:sid.toUpperCase(),nick:nick,cohort:cohort};
   save();
+  cacheStudentRecord(g.user);
   dbRegisterStudent(g.user).then(()=>console.log('Registered in DB'));
   initHome(); show('home');
 }
 function skipReg(){
-  g.user={name:'',sid:'',nick:''};
+  g.user={name:'',sid:'',nick:'',cohort:getActiveCohort().id};
   try{localStorage.setItem('topik_skip','1');}catch(e){}
   initHome();show('home');
 }
@@ -293,8 +395,9 @@ async function doLogin(){
 }
 
 async function completeLogin(student){
-  g.user = {name:student.name, sid:student.student_id, nick:student.nickname||''};
+  g.user = {name:student.name, sid:student.student_id, nick:student.nickname||'', cohort:student.cohort||getActiveCohort().id};
   save();
+  cacheStudentRecord(g.user);
 
   const [dbProgress, dbFails] = await Promise.all([
     dbLoadMyProgress(student.student_id),
@@ -329,8 +432,14 @@ async function completeLogin(student){
 // ── HOME (With Phase 2 "Study 30 Words" & "Start Quiz" options) ──
 function initHome(){
   load();
+  populateCohortSelects();
   const disp=g.user.nick||g.user.name.split(' ')[0]||'';
-  document.getElementById('welcome-strip').textContent=disp?'👋 안녕하세요, '+disp+'!':'';
+  const cohortObj = getCohorts().find(c=>c.id===g.user.cohort);
+  const cohortName = cohortObj ? cohortObj.name.replace(' (Current)','') : (g.user.cohort || '2026 Spring');
+  const isCurrent = cohortObj ? cohortObj.active : true;
+  document.getElementById('welcome-strip').innerHTML=disp
+    ? `<span>👋 안녕하세요, <strong>${disp}</strong>!</span> <span class="cohort-badge ${isCurrent?'current':'alumni'}">${cohortName}</span>`
+    : '';
 
   const totalDone=Object.values(g.done).filter(Boolean).length;
   document.getElementById('sL').textContent=totalDone;
@@ -694,56 +803,116 @@ function renderDictionary(){
   }
 }
 
-// ── LEADERBOARD ──
+// ── LEADERBOARD WITH COHORT FILTERING ──
+let cachedLBData = [];
+
 async function renderLB(){
   load();
-  document.getElementById('lb-top3').innerHTML='<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);padding:20px">Loading... ⏳</div>';
-  document.getElementById('lb-list').innerHTML='';
+  populateCohortSelects();
+  const top3 = document.getElementById('lb-top3');
+  const rest = document.getElementById('lb-list');
+  if(top3) top3.innerHTML='<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);padding:20px">Loading... ⏳</div>';
+  if(rest) rest.innerHTML='';
 
-  const [lbRaw, progRaw] = await Promise.all([
+  const [lbRaw, progRaw, cachedStuds] = await Promise.all([
     dbLoadLeaderboard(),
-    sbFetch('/rest/v1/progress?select=student_id,correct&limit=2000')
+    sbFetch('/rest/v1/progress?select=student_id,correct&limit=2000'),
+    Promise.resolve(getCachedStudents())
   ]);
 
-  const wordMap={};
-  (progRaw||[]).forEach(r=>{
-    wordMap[r.student_id]=(wordMap[r.student_id]||0)+(r.correct||0);
+  const cohortMap = {};
+  cachedStuds.forEach(s => { if(s.sid) cohortMap[s.sid] = s.cohort; });
+
+  const wordMap = {};
+  (progRaw || []).forEach(r => {
+    wordMap[r.student_id] = (wordMap[r.student_id] || 0) + (r.correct || 0);
   });
 
-  const lbData = (lbRaw||[]).map(r=>({
-    name:r.name, sid:r.student_id, nick:r.nickname||'',
-    words:wordMap[r.student_id]||0,
-    levels:r.levels_done||0
-  })).sort((a,b)=>b.words-a.words);
+  let combined = [...(lbRaw || [])];
+  if(g.user.name && g.user.sid && !combined.some(r => r.student_id === g.user.sid)){
+    const totalDone = Object.values(g.done).filter(Boolean).length;
+    combined.push({
+      student_id: g.user.sid,
+      name: g.user.name,
+      nickname: g.user.nick,
+      cohort: g.user.cohort || getActiveCohort().id,
+      levels_done: totalDone
+    });
+    wordMap[g.user.sid] = wordMap[g.user.sid] || (totalDone * 24);
+  }
 
-  const top3=document.getElementById('lb-top3');
-  const rest=document.getElementById('lb-list');
+  const activeCohortId = getActiveCohort().id;
 
-  if(lbData.length===0){
-    top3.innerHTML='';
-    rest.innerHTML='<div class="lb-empty">No scores yet.<br>Register and complete levels to appear here! 🏆</div>';
+  cachedLBData = combined.map(r => {
+    const studentCohort = r.cohort || cohortMap[r.student_id] || (r.student_id === g.user.sid ? g.user.cohort : activeCohortId);
+    return {
+      name: r.name,
+      sid: r.student_id,
+      nick: r.nickname || '',
+      cohort: studentCohort,
+      words: wordMap[r.student_id] || (r.levels_done ? r.levels_done * 24 : 0),
+      levels: r.levels_done || 0
+    };
+  }).sort((a,b) => b.words - a.words);
+
+  const filterSelect = document.getElementById('lb-cohort-filter');
+  const selectedCohort = filterSelect ? filterSelect.value : 'all';
+  displayLBList(selectedCohort);
+}
+
+function filterLBByCohort(cohortId){
+  displayLBList(cohortId);
+}
+
+function displayLBList(cohortId){
+  const top3 = document.getElementById('lb-top3');
+  const rest = document.getElementById('lb-list');
+  if(!top3 || !rest) return;
+
+  const cohorts = getCohorts();
+  const filtered = (!cohortId || cohortId === 'all')
+    ? cachedLBData
+    : cachedLBData.filter(item => item.cohort === cohortId);
+
+  if(filtered.length === 0){
+    top3.innerHTML = '';
+    rest.innerHTML = '<div class="lb-empty">No students found in this cohort.<br>Complete vocabulary levels to appear on the board! 🏆</div>';
     return;
   }
 
-  const podiumOrder=[lbData[1],lbData[0],lbData[2]].filter(Boolean);
-  const podiumMedals=['🥈','🥇','🥉'];
-  top3.innerHTML=podiumOrder.map((e,i)=>`
-    <div class="lb-podium${podiumMedals[i]==='🥇'?' p1':''}">
-      <div class="lb-medal">${podiumMedals[i]}</div>
-      <div class="lb-pname">${e.nick||e.name.split(' ')[0]}</div>
-      <div class="lb-pscore">${e.words}</div>
-      <div class="lb-psub">words mastered</div>
-    </div>`).join('');
+  const podiumOrder = [filtered[1], filtered[0], filtered[2]].filter(Boolean);
+  const podiumMedals = ['🥈', '🥇', '🥉'];
+  top3.innerHTML = podiumOrder.map((e, i) => {
+    const cObj = cohorts.find(c => c.id === e.cohort);
+    const cName = cObj ? cObj.name.replace(' (Current)', '') : (e.cohort || '2026 Spring');
+    const isCur = cObj ? cObj.active : true;
+    return `
+      <div class="lb-podium${podiumMedals[i] === '🥇' ? ' p1' : ''}">
+        <div class="lb-medal">${podiumMedals[i]}</div>
+        <div class="lb-pname">${e.nick || e.name.split(' ')[0]}</div>
+        <div class="lb-pscore">${e.words}</div>
+        <div class="lb-psub">words mastered</div>
+        <div style="margin-top:6px"><span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:2px 8px">${cName}</span></div>
+      </div>`;
+  }).join('');
 
-  rest.innerHTML=lbData.slice(3).map((e,i)=>`
-    <div class="lb-row">
-      <div class="lb-rank">${i+4}</div>
-      <div class="lb-info">
-        <div class="lb-name">${e.nick||e.name.split(' ')[0]}</div>
-        <div class="lb-meta">${e.name} · ${e.sid||'Guest'}</div>
-      </div>
-      <div class="lb-score">${e.words} words</div>
-    </div>`).join('') || '';
+  rest.innerHTML = filtered.slice(3).map((e, i) => {
+    const cObj = cohorts.find(c => c.id === e.cohort);
+    const cName = cObj ? cObj.name.replace(' (Current)', '') : (e.cohort || '2026 Spring');
+    const isCur = cObj ? cObj.active : true;
+    return `
+      <div class="lb-row">
+        <div class="lb-rank">${i + 4}</div>
+        <div class="lb-info">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="lb-name">${e.nick || e.name.split(' ')[0]}</span>
+            <span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:1px 6px">${cName}</span>
+          </div>
+          <div class="lb-meta">${e.name} · ${e.sid || 'Guest'}</div>
+        </div>
+        <div class="lb-score">${e.words} words</div>
+      </div>`;
+  }).join('') || '';
 }
 
 // ── GAME (QUIZ MODE) ──
@@ -1567,47 +1736,53 @@ function finishExam(){
 }
 
 // ── CERTIFICATE ──
-function showCertificate(pct,advanced){
+function showCertificate(pct,advanced,customStudent){
   document.getElementById('cert-level-badge').textContent=advanced?'🏅 ADVANCED LEVEL 2 CERTIFICATE':'📜 TOPIK I CERTIFICATE';
   document.getElementById('cert-sub').textContent=`Score: ${pct}% · ${advanced?'Advanced':'Standard'} · Korean Language Program`;
-  const name=g.user.name||'STUDENT';
-  const sid=g.user.sid||'';
+  const name=customStudent?.name || g.user.name || 'STUDENT';
+  const sid=customStudent?.sid || g.user.sid || '';
+  const cohortId=customStudent?.cohort || g.user.cohort || getActiveCohort().id;
+  const cohortObj=getCohorts().find(c=>c.id===cohortId);
+  const cohortName=cohortObj ? cohortObj.name.replace(' (Current)','') : (cohortId || '2026 Spring');
   const dateStr=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  document.getElementById('cert-preview').innerHTML=buildCertHTML(name,sid,pct,advanced,dateStr);
+  document.getElementById('cert-preview').innerHTML=buildCertHTML(name,sid,pct,advanced,dateStr,cohortName);
   show('cert-screen');
 }
 
-function buildCertHTML(name,sid,pct,advanced,dateStr){
+function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
   const bc=advanced?'#D4A017':'#1B4F8A';
   const ac=advanced?'#F5C518':'#2E86DE';
   const lt=advanced?'Advanced — TOPIK I Ready for Level 2':'TOPIK I Vocabulary Completion';
   const logo=`data:image/jpeg;base64,${KDU_LOGO_B64}`;
+  const cohortDisplay = cohortName || '2026 Spring Semester';
   return `<div id="cert-content" style="font-family:Georgia,serif;background:#FEFEFE;padding:32px 28px;border:6px solid ${bc};box-shadow:inset 0 0 0 3px ${ac};">
-    <div style="text-align:center;margin-bottom:18px">
-      <img src="${logo}" style="width:65px;height:auto;margin-bottom:8px" alt="KDU">
-      <div style="font-size:10px;font-weight:700;color:#666;letter-spacing:3px;text-transform:uppercase">KyungDong University Global</div>
-      <div style="font-size:9px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Korean Language Program</div>
+    <div style="text-align:center;margin-bottom:16px">
+      <img src="${logo}" style="width:72px;height:auto;margin-bottom:8px;object-fit:contain" alt="KDU Crest">
+      <div style="font-size:12px;font-weight:700;color:#1B4F8A;letter-spacing:3px;text-transform:uppercase">KyungDong University Global</div>
+      <div style="font-size:10px;font-weight:600;color:#D4A017;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Korean Language Program · 쏙쏙 어휘왕 (Vocab-King)</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,${bc})"></div>
       <div style="color:${ac};font-size:14px">✦</div>
       <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,${bc})"></div>
     </div>
-    <div style="text-align:center;margin-bottom:14px">
-      <div style="font-size:9px;letter-spacing:4px;color:#999;text-transform:uppercase;margin-bottom:6px">Certificate of Achievement</div>
-      <div style="font-size:18px;font-weight:700;color:#1a1a2e">${lt}</div>
+    <div style="text-align:center;margin-bottom:12px">
+      <div style="font-size:9px;letter-spacing:4px;color:#888;text-transform:uppercase;margin-bottom:4px">Official Certificate of Academic Achievement</div>
+      <div style="font-size:19px;font-weight:700;color:#1a1a2e">${lt}</div>
     </div>
-    <div style="text-align:center;font-size:11px;color:#777;margin-bottom:4px;font-style:italic">This is to certify that</div>
-    <div style="text-align:center;font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:4px">${name}</div>
-    <div style="text-align:center;font-size:10px;color:#999;margin-bottom:14px">Student ID: ${sid}</div>
-    <div style="text-align:center;font-size:11px;color:#555;line-height:1.7;margin-bottom:14px;padding:0 8px">
-      has successfully completed the <strong>쏙쏙 어휘왕 TOPIK I</strong> Vocabulary Program,
-      demonstrating mastery of <strong>1,470 Korean vocabulary words</strong> across 5 intensive
-      program days, achieving a final examination score of
+    <div style="text-align:center;font-size:11px;color:#777;margin-bottom:4px;font-style:italic">This is proudly awarded to</div>
+    <div style="text-align:center;font-size:23px;font-weight:700;color:#1a1a2e;margin-bottom:4px;letter-spacing:0.5px">${name}</div>
+    <div style="text-align:center;font-size:11px;color:#666;margin-bottom:12px">
+      <span>Student ID: <strong>${sid}</strong></span> · <span>Semester Cohort: <strong>${cohortDisplay}</strong></span>
+    </div>
+    <div style="text-align:center;font-size:11.5px;color:#444;line-height:1.65;margin-bottom:14px;padding:0 8px">
+      has successfully completed the intensive <strong>쏙쏙 어휘왕 TOPIK I</strong> Vocabulary Curriculum,
+      demonstrating certified mastery of <strong>1,470 Korean vocabulary words</strong> across 5 program days,
+      and fulfilling academic course evaluation criteria with a final examination score of:
     </div>
     <div style="text-align:center;margin-bottom:14px">
-      <div style="display:inline-block;background:linear-gradient(135deg,${bc},${ac});color:#fff;font-size:26px;font-weight:900;padding:10px 26px;border-radius:10px">${pct}%</div>
-      <div style="font-size:10px;color:#999;margin-top:5px">${advanced?'Advanced Level — Excellent':'Standard Level — Pass'}</div>
+      <div style="display:inline-block;background:linear-gradient(135deg,${bc},${ac});color:#fff;font-size:26px;font-weight:900;padding:10px 28px;border-radius:10px;box-shadow:0 4px 12px rgba(27,79,138,0.25)">${pct}%</div>
+      <div style="font-size:11px;font-weight:600;color:${bc};margin-top:5px">${advanced?'🏅 Advanced Level 2 Recommendation — Highest Honors':'✓ Standard Level TOPIK I Pass'}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,${bc})"></div>
@@ -1616,26 +1791,30 @@ function buildCertHTML(name,sid,pct,advanced,dateStr){
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end">
       <div style="text-align:center">
-        <div style="font-size:18px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:4px">Hyejoon Yoon</div>
-        <div style="width:110px;height:1px;background:#ccc;margin-bottom:4px"></div>
-        <div style="font-size:9px;color:#888">Prof. Hyejoon Yoon</div>
-        <div style="font-size:9px;color:#aaa">Korean Language Program</div>
+        <div style="font-size:20px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:2px">Hyejoon Yoon</div>
+        <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
+        <div style="font-size:10px;font-weight:700;color:#222">Prof. Hyejoon Yoon</div>
+        <div style="font-size:8.5px;color:#666">Academic Supervisor &amp; Course Evaluator</div>
+        <div style="font-size:8px;color:#888">Korean Language Program</div>
       </div>
       <div style="text-align:center">
-        <div style="width:46px;height:46px;border-radius:50%;border:2px solid ${bc};display:flex;align-items:center;justify-content:center;margin:0 auto 4px">
-          <span style="font-size:16px">🦁</span>
+        <div style="width:50px;height:50px;border-radius:50%;border:2px solid ${bc};display:flex;align-items:center;justify-content:center;margin:0 auto 4px;background:#fafafa">
+          <span style="font-size:20px">🇰🇷</span>
         </div>
-        <div style="font-size:9px;color:#aaa">Official Seal</div>
+        <div style="font-size:9px;font-weight:700;color:#666">Official Seal</div>
       </div>
       <div style="text-align:center">
-        <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:4px">${dateStr}</div>
-        <div style="width:110px;height:1px;background:#ccc;margin-bottom:4px"></div>
-        <div style="font-size:9px;color:#888">Date of Issue</div>
-        <div style="font-size:9px;color:#aaa">Goseong, South Korea</div>
+        <div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:4px">${dateStr}</div>
+        <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
+        <div style="font-size:10px;font-weight:700;color:#222">Date of Issue</div>
+        <div style="font-size:8.5px;color:#666">Goseong Global Campus</div>
+        <div style="font-size:8px;color:#888">KyungDong University, South Korea</div>
       </div>
     </div>
-    <div style="text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid #eee">
-      <div style="font-size:8px;color:#bbb;letter-spacing:1px">KYUNGDONG UNIVERSITY GLOBAL · 쏙쏙 어휘왕 TOPIK I · ${new Date().getFullYear()}</div>
+    <div style="margin-top:14px;padding:9px 12px;background:#f8f9fa;border-radius:6px;border:1px solid #e2e8f0;text-align:center;font-size:9px;color:#475569;line-height:1.45">
+      <div><strong>Project Initiated &amp; Developed by:</strong> ALINGILYA CRISPIN NJEWA (Lead Developer / Student Founder)</div>
+      <div><strong>Academic Exactitude &amp; Course Evaluation:</strong> Prof. Hyejoon Yoon (Faculty Supervisor, Korean Language Program)</div>
+      <div style="margin-top:2px;font-size:8px;color:#94a3b8">KYUNGDONG UNIVERSITY GLOBAL · 쏙쏙 어휘왕 TOPIK I CERTIFICATION</div>
     </div>
   </div>`;
 }
@@ -1779,6 +1958,353 @@ document.addEventListener('keydown', e=>{
     }
   }
 });
+
+// ═══════════════════════════════════════════════════
+// ADMIN DASHBOARD — Faculty Portal
+// KDU Korean Program · Protected by passcode
+// ═══════════════════════════════════════════════════
+const ADMIN_PASSCODES = ['kdu2026', 'admin1234', 'KDU2026'];
+let adminAuthenticated = false;
+let adminCachedStudents = [];
+
+function openAdmin(){
+  adminAuthenticated = false;
+  show('admin');
+  const authCard = document.getElementById('admin-auth-card');
+  const dashCard = document.getElementById('admin-dashboard');
+  if(authCard) authCard.style.display = 'block';
+  if(dashCard) dashCard.style.display = 'none';
+  const passInput = document.getElementById('admin-passcode');
+  if(passInput){ passInput.value = ''; setTimeout(()=>passInput.focus(), 200); }
+  const err = document.getElementById('admin-auth-err');
+  if(err) err.style.display = 'none';
+}
+
+function doAdminAuth(){
+  const passEl = document.getElementById('admin-passcode');
+  const errEl = document.getElementById('admin-auth-err');
+  const pass = (passEl ? passEl.value : '').trim();
+  if(ADMIN_PASSCODES.includes(pass)){
+    adminAuthenticated = true;
+    const authCard = document.getElementById('admin-auth-card');
+    const dashCard = document.getElementById('admin-dashboard');
+    if(authCard) authCard.style.display = 'none';
+    if(dashCard) dashCard.style.display = 'block';
+    populateCohortSelects();
+    renderAdminDashboard();
+  } else {
+    if(errEl){ errEl.style.display='block'; errEl.textContent='Incorrect passcode. Ask Prof. Hyejoon Yoon for access.'; }
+    if(passEl){ passEl.value=''; passEl.focus(); }
+  }
+}
+
+function adminLock(){
+  adminAuthenticated = false;
+  show('home');
+}
+
+function switchAdminTab(tab){
+  ['overview','students','cohorts','certs'].forEach(t=>{
+    const panel = document.getElementById('apanel-'+t);
+    const btn = document.getElementById('atab-'+t);
+    if(panel) panel.style.display = t===tab ? 'block' : 'none';
+    if(btn){
+      if(t===tab){
+        btn.style.background='var(--gold)'; btn.style.color='var(--navy)'; btn.style.fontWeight='700';
+      } else {
+        btn.style.background='transparent'; btn.style.color='rgba(255,255,255,0.55)'; btn.style.fontWeight='500';
+      }
+    }
+  });
+  if(tab==='overview') renderAdminOverview();
+  else if(tab==='students') renderAdminStudents();
+  else if(tab==='cohorts') renderAdminCohorts();
+  else if(tab==='certs') renderAdminCerts();
+}
+
+async function renderAdminDashboard(){
+  if(!adminAuthenticated) return;
+  const [studentsRaw, progRaw, failRaw] = await Promise.all([
+    sbFetch('/rest/v1/students?select=*&limit=500'),
+    sbFetch('/rest/v1/progress?select=*&limit=3000'),
+    sbFetch('/rest/v1/fail_words?select=*&limit=3000')
+  ]);
+
+  const localStudents = getCachedStudents();
+  const merged = {};
+  localStudents.forEach(s=>{ merged[s.sid] = {...s}; });
+  (studentsRaw||[]).forEach(s=>{
+    const key = s.student_id;
+    merged[key] = {
+      sid: key,
+      name: s.name||'',
+      nick: s.nickname||'',
+      cohort: s.cohort || merged[key]?.cohort || getActiveCohort().id,
+      lastSeen: s.last_seen||'',
+      words: merged[key]?.words||0,
+      levels: merged[key]?.levels||0,
+      examPassed: merged[key]?.examPassed||false,
+      examScore: merged[key]?.examScore||0
+    };
+  });
+
+  const progressMap = {};
+  (progRaw||[]).forEach(p=>{
+    if(!progressMap[p.student_id]) progressMap[p.student_id] = {words:0,levels:0,examPassed:false,examScore:0};
+    if(p.level_key==='final_exam'){
+      if(p.completed) progressMap[p.student_id].examPassed = true;
+      if((p.score_pct||0) > progressMap[p.student_id].examScore) progressMap[p.student_id].examScore = p.score_pct;
+    } else {
+      progressMap[p.student_id].words += (p.correct||0);
+      if(p.completed) progressMap[p.student_id].levels++;
+    }
+  });
+  Object.keys(merged).forEach(sid=>{
+    if(progressMap[sid]){
+      merged[sid].words = progressMap[sid].words;
+      merged[sid].levels = progressMap[sid].levels;
+      merged[sid].examPassed = progressMap[sid].examPassed;
+      merged[sid].examScore = progressMap[sid].examScore;
+    }
+  });
+
+  adminCachedStudents = Object.values(merged);
+
+  const failWordMap = {};
+  (failRaw||[]).forEach(f=>{ failWordMap[f.word_kr] = (failWordMap[f.word_kr]||0)+1; });
+
+  const cohorts = getCohorts();
+  const activeCohort = getActiveCohort();
+  const totalStudents = adminCachedStudents.length;
+  const certified = adminCachedStudents.filter(s=>s.examPassed).length;
+  const totalWords = adminCachedStudents.reduce((a,s)=>a+(s.words||0),0);
+
+  const statTotal = document.getElementById('adm-stat-total');
+  const statActiveCohort = document.getElementById('adm-stat-active-cohort');
+  const statWords = document.getElementById('adm-stat-words');
+  const statPassed = document.getElementById('adm-stat-passed');
+  if(statTotal) statTotal.textContent = totalStudents;
+  if(statActiveCohort) statActiveCohort.textContent = activeCohort.name.replace(' (Current)','');
+  if(statWords) statWords.textContent = totalWords.toLocaleString();
+  if(statPassed) statPassed.textContent = certified;
+
+  const cohortListEl = document.getElementById('adm-cohort-list');
+  const cohortCountEl = document.getElementById('adm-cohort-count');
+  if(cohortListEl){
+    cohortListEl.innerHTML = cohorts.map(c=>{
+      const count = adminCachedStudents.filter(s=>s.cohort===c.id).length;
+      const pct = totalStudents > 0 ? Math.round(count/totalStudents*100) : 0;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div>
+          <span class="cohort-badge ${c.active?'current':'alumni'}">${c.name.replace(' (Current)','')}</span>
+          ${c.active ? '<span style="font-size:9px;color:var(--gold);margin-left:4px">★ Current</span>' : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="background:rgba(255,255,255,0.05);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;color:#fff">${count} students</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4)">${pct}%</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  if(cohortCountEl) cohortCountEl.textContent = totalStudents + ' students total';
+
+  const weakWordsEl = document.getElementById('adm-weak-words');
+  if(weakWordsEl){
+    const sorted = Object.entries(failWordMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    if(sorted.length===0){
+      weakWordsEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:12px">No fail data yet</div>';
+    } else {
+      weakWordsEl.innerHTML = sorted.map(([w,cnt],i)=>{
+        const wObj = allWords().find(x=>cleanKR(x.w)===cleanKR(w)||x.w===w);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:10px;color:rgba(255,255,255,0.3);width:16px;text-align:right">${i+1}</span>
+            <span style="font-family:'Noto Sans KR',sans-serif;font-size:13px;color:#fff;font-weight:600">${w}</span>
+            ${wObj ? `<span style="font-size:11px;color:rgba(255,255,255,0.45)">${wObj.e}</span>` : ''}
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 7px;border-radius:10px">${cnt} fails</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  switchAdminTab('overview');
+}
+
+function renderAdminOverview(){
+  const panel = document.getElementById('apanel-overview');
+  if(panel) panel.style.display='block';
+}
+
+function renderAdminStudents(){
+  const tbody = document.getElementById('adm-student-tbody');
+  if(!adminCachedStudents.length){
+    if(tbody) tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.4);padding:24px">No student data. Open Overview first to load data.</td></tr>';
+    return;
+  }
+  const search = (document.getElementById('adm-student-search')?.value||'').trim().toLowerCase();
+  const cohortFilter = document.getElementById('adm-student-cohort')?.value||'all';
+  const cohorts = getCohorts();
+  const cohortMap = {};
+  cohorts.forEach(c=>cohortMap[c.id]=c);
+
+  const filtered = adminCachedStudents.filter(s=>{
+    if(cohortFilter!=='all' && s.cohort!==cohortFilter) return false;
+    if(search){ const h=[s.name,s.nick,s.sid].join(' ').toLowerCase(); if(!h.includes(search)) return false; }
+    return true;
+  }).sort((a,b)=>(b.words||0)-(a.words||0));
+
+  if(!tbody) return;
+  if(filtered.length===0){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.4);padding:24px">No students match your filter.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(s=>{
+    const cObj = cohortMap[s.cohort];
+    const cName = cObj ? cObj.name.replace(' (Current)','') : (s.cohort||'—');
+    const isCur = cObj ? cObj.active : false;
+    const examCell = s.examPassed
+      ? `<span style="color:#22c55e;font-weight:700">✓ ${s.examScore}%</span>`
+      : (s.examScore>0 ? `<span style="color:#f59e0b">Fail ${s.examScore}%</span>` : '<span style="color:rgba(255,255,255,0.3)">—</span>');
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px">${s.sid||'—'}</td>
+      <td><div>${s.name||'—'}</div>${s.nick?`<div style="font-size:10px;color:rgba(255,255,255,0.4)">${s.nick}</div>`:''}</td>
+      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${cName}</span></td>
+      <td style="text-align:center;font-weight:700;color:var(--sky)">${(s.words||0).toLocaleString()}</td>
+      <td style="text-align:center">${s.levels||0}</td>
+      <td>${examCell}</td>
+      <td>${s.examPassed?`<button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert('${s.sid}')">📜 Cert</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAdminCohorts(){
+  const cohorts = getCohorts();
+  const listEl = document.getElementById('adm-all-cohorts-list');
+  if(!listEl) return;
+  listEl.innerHTML = cohorts.map(c=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,${c.active?'0.18':'0.06'});margin-bottom:6px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span class="cohort-badge ${c.active?'current':'alumni'}">${c.name.replace(' (Current)','')}</span>
+          ${c.active ? '<span style="font-size:10px;color:var(--gold)">★ Active</span>' : ''}
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Code: <strong>${c.id}</strong> · ${c.semester} ${c.year}</div>
+      </div>
+      <button class="btn-rg" style="padding:5px 12px;font-size:10px;border-radius:14px;background:${c.active?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.15)'};color:${c.active?'#ef4444':'#22c55e'};border:1px solid currentColor" onclick="toggleCohortActive('${c.id}')">
+        ${c.active ? 'Deactivate' : 'Set Active'}
+      </button>
+    </div>`).join('');
+}
+
+function renderAdminCerts(){
+  const certified = adminCachedStudents.filter(s=>s.examPassed).sort((a,b)=>(b.examScore||0)-(a.examScore||0));
+  const cohorts = getCohorts();
+  const cohortMap = {};
+  cohorts.forEach(c=>cohortMap[c.id]=c);
+  const tbody = document.getElementById('adm-cert-tbody');
+  if(!tbody) return;
+  if(certified.length===0){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.4);padding:24px">No certified students yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = certified.map(s=>{
+    const cObj = cohortMap[s.cohort];
+    const cName = cObj ? cObj.name.replace(' (Current)','') : (s.cohort||'—');
+    const isCur = cObj ? cObj.active : false;
+    const isAdv = (s.examScore||0) >= 95;
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px">${s.sid||'—'}</td>
+      <td><strong>${s.name||'—'}</strong>${s.nick?` <span style="font-size:10px;color:rgba(255,255,255,0.4)">(${s.nick})</span>`:''}</td>
+      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${cName}</span></td>
+      <td style="text-align:center;font-weight:700;color:${isAdv?'#D4A017':'#22c55e'}">${s.examScore||0}%</td>
+      <td>${isAdv ? '🏅 Advanced' : '✓ Standard'}</td>
+      <td style="font-size:10px;color:rgba(255,255,255,0.5)">Prof. Hyejoon Yoon</td>
+      <td><button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert('${s.sid}')">📜 Preview</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function addNewCohort(){
+  const name = (document.getElementById('new-cohort-name')?.value||'').trim();
+  const id   = (document.getElementById('new-cohort-id')?.value||'').trim();
+  const year = parseInt(document.getElementById('new-cohort-year')?.value||'2026',10);
+  const setActive = document.getElementById('new-cohort-active')?.checked ?? true;
+  if(!name || !id){ alert('Please fill in Semester Title and Cohort Code.'); return; }
+  const cohorts = getCohorts();
+  if(cohorts.find(c=>c.id===id)){ alert(`Code "${id}" already exists.`); return; }
+  if(setActive){ cohorts.forEach(c=>{ c.active=false; c.name=c.name.replace(' (Current)',''); }); }
+  const semester = id.endsWith('-1')?'Spring':id.endsWith('-2')?'Fall':name;
+  cohorts.unshift({ id, name: name+(setActive?' (Current)':''), semester, year, active:setActive });
+  saveCohorts(cohorts);
+  populateCohortSelects();
+  renderAdminCohorts();
+  if(document.getElementById('new-cohort-name')) document.getElementById('new-cohort-name').value='';
+  if(document.getElementById('new-cohort-id'))   document.getElementById('new-cohort-id').value='';
+  const statActiveCohort = document.getElementById('adm-stat-active-cohort');
+  if(statActiveCohort && setActive) statActiveCohort.textContent = name;
+  const msg = document.createElement('div');
+  msg.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;font-weight:700;font-size:13px;padding:10px 22px;border-radius:30px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
+  msg.textContent = `✓ Cohort "${name}" created!`;
+  document.body.appendChild(msg);
+  setTimeout(()=>msg.remove(), 2500);
+}
+
+function toggleCohortActive(id){
+  const cohorts = getCohorts();
+  const target = cohorts.find(c=>c.id===id);
+  if(!target) return;
+  if(!target.active){
+    cohorts.forEach(c=>{ c.active=(c.id===id); c.name=c.name.replace(' (Current)',''); });
+    target.name += ' (Current)';
+  } else {
+    target.active = false;
+    target.name = target.name.replace(' (Current)','');
+  }
+  saveCohorts(cohorts);
+  populateCohortSelects();
+  renderAdminCohorts();
+  const statActiveCohort = document.getElementById('adm-stat-active-cohort');
+  if(statActiveCohort) statActiveCohort.textContent = getActiveCohort().name.replace(' (Current)','');
+}
+
+function viewStudentCert(sid){
+  const s = adminCachedStudents.find(x=>x.sid===sid);
+  if(!s || !s.examPassed) return;
+  const advanced = (s.examScore||0) >= 95;
+  const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const cohortObj = getCohorts().find(c=>c.id===s.cohort);
+  const cohortName = cohortObj ? cohortObj.name.replace(' (Current)','') : (s.cohort||'2026 Spring');
+  document.getElementById('cert-level-badge').textContent = advanced ? '🏅 ADVANCED LEVEL 2 CERTIFICATE' : '📜 TOPIK I CERTIFICATE';
+  document.getElementById('cert-sub').textContent = `Score: ${s.examScore||0}% · ${advanced?'Advanced':'Standard'} · Korean Language Program`;
+  document.getElementById('cert-preview').innerHTML = buildCertHTML(s.name||'STUDENT', s.sid||'', s.examScore||0, advanced, dateStr, cohortName);
+  show('cert-screen');
+}
+
+function exportStudentsCSV(){
+  if(!adminCachedStudents.length){ alert('No data to export. Open Overview first.'); return; }
+  const cohorts = getCohorts();
+  const cohortMap = {};
+  cohorts.forEach(c=>cohortMap[c.id]=c);
+  const headers = ['Student ID','Name','Nickname','Cohort','Semester','Words Mastered','Levels Done','Exam Passed','Exam Score %','Last Seen'];
+  const rows = adminCachedStudents.map(s=>{
+    const cObj = cohortMap[s.cohort];
+    const cName = cObj ? cObj.name.replace(' (Current)','') : (s.cohort||'');
+    return [
+      s.sid||'', `"${(s.name||'').replace(/"/g,'""')}"`, `"${(s.nick||'').replace(/"/g,'""')}"`,
+      `"${cName.replace(/"/g,'""')}"`, cObj ? `${cObj.semester} ${cObj.year}` : '',
+      s.words||0, s.levels||0, s.examPassed?'YES':'NO', s.examScore||0,
+      s.lastSeen ? new Date(s.lastSeen).toLocaleDateString() : ''
+    ].join(',');
+  });
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`KDU_VocabKing_Roster_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // ── PWA SERVICE WORKER REGISTRATION (Phase 6) ──
 if(typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof location !== 'undefined' && location.protocol.startsWith('http')){
