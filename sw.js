@@ -1,22 +1,23 @@
 // ═══════════════════════════════════════════════════
-// VOCAB-KING v3 — Offline Service Worker
-// Caches static application shell & vocabulary data.
-// Never caches private student data or Supabase API requests.
+// VOCAB-KING v4 — Offline Service Worker
+// Network-first for app shell, cache fallback for offline
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME = 'vocab-king-v3-static-v1';
+const CACHE_NAME = 'vocab-king-v5-networkfirst-20261027';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './vocab-data.js',
   './app.js',
+  './vk_logo.jpg',
   './manifest.json'
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).catch(()=>{})
   );
 });
 
@@ -34,22 +35,21 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(req.url);
 
-  // Never cache Supabase REST API or external dynamic APIs
+  // Never cache external API or Supabase requests
   if (url.hostname.includes('supabase.co') || url.pathname.includes('/rest/v1/')) {
     return;
   }
 
+  // Network-first strategy for app shell assets so updates appear immediately
   event.respondWith(
-    caches.match(req).then(cached => {
-      const networkFetch = fetch(req).then(res => {
-        if (res && res.status === 200 && (url.origin === self.location.origin || url.hostname.includes('fonts.g'))) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
-        }
-        return res;
-      }).catch(() => cached || caches.match('./index.html'));
-
-      return cached || networkFetch;
+    fetch(req).then(networkRes => {
+      if (networkRes && networkRes.status === 200) {
+        const clone = networkRes.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, clone)).catch(()=>{});
+      }
+      return networkRes;
+    }).catch(() => {
+      return caches.match(req).then(cached => cached || caches.match('./index.html'));
     })
   );
 });

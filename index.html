@@ -6,42 +6,74 @@
 <meta name="theme-color" content="#0F0A2B">
 <title>쏙쏙 어휘왕 · Vocab King v3</title>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261027_crown">
 </head>
 <body>
 
-<!-- INTRO -->
-<div id="intro" class="screen active">
-<div class="ii">
-  <div class="logo-box">
-    <img src="vk_logo.jpg" alt="Vocab-King Logo" class="kdu-hero-logo" style="width:110px;height:auto;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(79,70,229,0.45));">
-  </div>
-  <div class="kdu-pill">TOPIK I · Korean Vocabulary King</div>
-  <div class="ititle">쏙쏙 <span class="g">어휘왕</span></div>
-  <div class="isub">Vocab-King · Learn Korean. Learn Confidently.</div>
-  <div class="idiv"></div>
-  <div class="idesc">
-    <div class="idesc-en">
-      Master all <strong>1,470 essential TOPIK I vocabulary words</strong> across 5 intensive program days.
-      Practice with audio pronunciation, test your recall with intelligent quizzes, review tricky words, and earn your official certification.
+<!-- SPLASH / LOADING SCREEN -->
+<div id="splash" class="screen active">
+  <div class="splash-content">
+    <div class="splash-logo-wrap">
+      <div class="splash-aura"></div>
+      <img src="vk_logo.jpg" alt="Vocab-King Logo" class="splash-logo">
     </div>
-    <div class="idesc-kr">
-      5일 완성 1,470개 한국어 필수 어휘 학습 프로그램. 원어민 발음 듣기, 스마트 퀴즈, 오답 복습 및 최종 시험을 통해 한국어 실력을 탄탄하게 키워보세요.
+    <div class="splash-title">VOCAB <span>KING</span></div>
+    <div class="splash-kr">쏙쏙 어휘왕 · 한국어 학습</div>
+    <div class="splash-slogan">LEARN KOREAN · LEARN CONFIDENTLY</div>
+    <div class="splash-progress-track">
+      <div class="splash-progress-fill" id="splash-pfill"></div>
     </div>
+    <div class="splash-status" id="splash-status">Loading 1,470 Vocabulary Words...</div>
   </div>
-  <div class="ifeats">
-    <div class="ifeat"><div class="ifeat-i">📖</div><div class="ifeat-t">1,470 Words from<br><strong>Curriculum Days 1–49</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">🔊</div><div class="ifeat-t">Native Audio<br><strong>Pronunciation</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">🧠</div><div class="ifeat-t">Study First &amp;<br><strong>Smart Quiz Review</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">📜</div><div class="ifeat-t">TOPIK I Official<br><strong>Certificate of Mastery</strong></div></div>
-  </div>
-  <button class="btn-enter" id="intro-btn">시작하기 · Start Learning! 🚀</button>
-  <div style="display:flex;gap:12px;margin-top:14px;width:100%;justify-content:center">
-    <button class="btn-ro" style="flex:1;font-size:11px;padding:9px 12px;border-radius:20px" onclick="show('about')">ℹ️ About the App</button>
-    <button class="btn-ro" style="flex:1;font-size:11px;padding:9px 12px;border-radius:20px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
-  </div>
-  <div class="ver" style="margin-top:12px">Vocab-King · KDU Global TOPIK I · 5 Program Days · Book Days 1–49</div>
 </div>
+
+<!-- WELCOMING SCREEN (App-Focused) -->
+<div id="intro" class="screen">
+  <div class="intro-container">
+    <div class="intro-hero-wrap">
+      <div class="intro-hero-aura"></div>
+      <img src="vk_logo.jpg" alt="Vocab-King Logo" class="intro-hero-logo">
+    </div>
+    <div class="vk-badge">👑 TOPIK I · Korean Vocabulary King</div>
+    <h1 class="vk-brand-title">VOCAB <span class="vk-crown-text">KING</span></h1>
+    <div class="vk-brand-kr">쏙쏙 어휘왕</div>
+    <div class="vk-slogan">Learn Korean · Learn Confidently</div>
+
+    <div class="vk-features-grid">
+      <div class="vk-feat-card">
+        <div class="vk-feat-icon">📖</div>
+        <div class="vk-feat-title">1,470 Words</div>
+        <div class="vk-feat-desc">5 Program Days covering Book Units 1–49</div>
+      </div>
+      <div class="vk-feat-card">
+        <div class="vk-feat-icon">🔊</div>
+        <div class="vk-feat-title">Native Audio</div>
+        <div class="vk-feat-desc">Natural Korean Web Speech pronunciation</div>
+      </div>
+      <div class="vk-feat-card">
+        <div class="vk-feat-icon">🧠</div>
+        <div class="vk-feat-title">Study &amp; Smart Quiz</div>
+        <div class="vk-feat-desc">Study First mode, fail reviews &amp; dictionary</div>
+      </div>
+      <div class="vk-feat-card">
+        <div class="vk-feat-icon">📜</div>
+        <div class="vk-feat-title">Official Certificate</div>
+        <div class="vk-feat-desc">Certified diploma upon passing final exam</div>
+      </div>
+    </div>
+
+    <div class="vk-audio-tester" onclick="speakWord('안녕하세요')">
+      <span class="audio-icon">🔊</span> Tap to test audio: 안녕하세요 (Hello)
+    </div>
+
+    <button class="btn-enter-main" id="intro-btn">시작하기 · Start Learning! 🚀</button>
+
+    <div class="intro-nav-pills">
+      <button class="intro-nav-btn" onclick="show('about')">ℹ️ About the App</button>
+      <button class="intro-nav-btn" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
+    </div>
+    <div class="intro-footer-version">Vocab-King TOPIK I · 5 Program Days · 49 Book Units</div>
+  </div>
 </div>
 
 <!-- REGISTER -->
@@ -100,6 +132,7 @@
       <div>Vocab-<span>King</span> <span style="font-size:12px;color:rgba(255,255,255,0.45);font-weight:600">어휘왕</span></div>
     </div>
     <div class="hbtns">
+      <button class="hbtn" onclick="show('intro')" title="Welcome &amp; App Overview" aria-label="Welcome Screen">✨</button>
       <button class="hbtn" onclick="openDictionary()" title="Searchable Dictionary (1,470 Words)" aria-label="Open Dictionary">🔍</button>
       <button class="hbtn" onclick="show('leaderboard');renderLB()" title="Leaderboard" aria-label="Open Leaderboard">🏆</button>
       <button class="hbtn" onclick="show('about')" title="About the App &amp; Initiators" aria-label="About the App">ℹ️</button>
@@ -120,9 +153,10 @@
   <button class="btn-outline" id="fail-btn" style="display:none">⚡ Review All Failed Words (<span id="fcnt">0</span>)</button>
   <button class="btn-outline" id="dict-home-btn" onclick="openDictionary()">🔍 &nbsp;Searchable Dictionary · 단어 사전 (1,470 Words)</button>
   <button class="btn-outline" onclick="show('exam-intro')" style="margin-top:6px;border-color:rgba(245,197,24,0.4);color:var(--gold)">📝 &nbsp;Take Final Exam · 시험 보기</button>
-  <div style="display:flex;gap:10px;margin-top:20px;width:100%;justify-content:center">
-    <button class="btn-ro" style="flex:1;font-size:12px;padding:10px;border-radius:24px" onclick="show('about')">ℹ️ About the App</button>
-    <button class="btn-ro" style="flex:1;font-size:12px;padding:10px;border-radius:24px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
+  <div style="display:flex;gap:8px;margin-top:20px;width:100%;justify-content:center;flex-wrap:wrap">
+    <button class="btn-ro" style="flex:1;min-width:100px;font-size:12px;padding:10px;border-radius:24px" onclick="show('intro')">✨ Welcome</button>
+    <button class="btn-ro" style="flex:1;min-width:100px;font-size:12px;padding:10px;border-radius:24px" onclick="show('about')">ℹ️ About the App</button>
+    <button class="btn-ro" style="flex:1;min-width:100px;font-size:12px;padding:10px;border-radius:24px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
   </div>
 </div>
 </div>
@@ -732,7 +766,7 @@
 </div>
 </div>
 
-<script src="vocab-data.js"></script>
-<script src="app.js"></script>
+<script src="vocab-data.js?v=20261027_crown"></script>
+<script src="app.js?v=20261027_crown"></script>
 </body>
 </html>

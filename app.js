@@ -2721,6 +2721,15 @@ if(typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof lo
 // ── INIT ──
 load();
 async function initApp(){
+  const splashEl = typeof document !== 'undefined' ? document.getElementById('splash') : null;
+  const pfill = splashEl ? document.getElementById('splash-pfill') : null;
+  const pstat = splashEl ? document.getElementById('splash-status') : null;
+
+  if(splashEl){
+    show('splash');
+    if(pfill) pfill.style.width = '35%';
+  }
+
   if(g.user.sid){
     dbUpdateLastSeen(g.user.sid);
     const dbFails = await dbLoadMyFails(g.user.sid);
@@ -2734,7 +2743,27 @@ async function initApp(){
     }
   }
   initHome();
-  if(!g.user.name && !localStorage.getItem('topik_skip')){show('intro');}
-  else{show('home');}
+
+  const proceedToTarget = () => {
+    if(!g.user.name && !localStorage.getItem('topik_skip')){
+      show('intro');
+    } else {
+      show('home');
+    }
+  };
+
+  if(splashEl && typeof setTimeout !== 'undefined'){
+    setTimeout(()=>{
+      if(pfill) pfill.style.width = '75%';
+      if(pstat) pstat.textContent = 'Preparing TOPIK I Modules & Audio...';
+      setTimeout(()=>{
+        if(pfill) pfill.style.width = '100%';
+        if(pstat) pstat.textContent = 'Welcome to Vocab-King! 👑';
+        setTimeout(proceedToTarget, 350);
+      }, 400);
+    }, 450);
+  } else {
+    proceedToTarget();
+  }
 }
 initApp();
