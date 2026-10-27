@@ -367,12 +367,23 @@ function switchTab(tab){
 }
 
 async function doLogin(){
-  const sid = document.getElementById('login-sid').value.trim().toUpperCase();
+  const sid = document.getElementById('login-sid').value.trim();
   const err = document.getElementById('login-err');
   const found = document.getElementById('login-found');
   const btn = document.getElementById('login-btn');
   if(!sid){err.style.display='block';err.textContent='Please enter your Student ID.';return;}
   err.style.display='none';
+
+  // Check if credentials correspond to an Administrator
+  const admins = getAdmins();
+  const matchedAdmin = admins.find(a => a.user.toLowerCase() === sid.toLowerCase());
+  if(matchedAdmin){
+    btn.disabled=false;
+    btn.textContent='Find My Profile 🔍';
+    openAdminLogin(matchedAdmin.user);
+    return;
+  }
+
   btn.textContent='Searching... ⏳';
   btn.disabled=true;
 
@@ -1735,7 +1746,76 @@ function finishExam(){
   }
 }
 
-// ── CERTIFICATE ──
+// ── CERTIFICATE (Customizable by Faculty & Admin) ──
+const DEFAULT_CERT_CONFIG = {
+  institution: 'KyungDong University Global',
+  department: 'Korean Language Program · 쏙쏙 어휘왕 (Vocab-King)',
+  title: 'Official Certificate of Academic Achievement',
+  body: 'has successfully completed the intensive 쏙쏙 어휘왕 TOPIK I Vocabulary Curriculum, demonstrating certified mastery of 1,470 Korean vocabulary words across 5 program days, and fulfilling academic course evaluation criteria with a final examination score of:',
+  sigName: 'Prof. Hyejoon Yoon',
+  sigTitle: 'Academic Supervisor & Course Evaluator',
+  sigDept: 'Korean Language Program',
+  location: 'Goseong Global Campus, KyungDong University, South Korea',
+  credits: 'Project Initiated & Developed by ALINGILYA CRISPIN NJEWA (Lead Developer) · Course Evaluation by Prof. Hyejoon Yoon',
+  passPct: 80,
+  honorsPct: 95
+};
+
+function getCertConfig(){
+  try {
+    const raw = localStorage.getItem('topik_cert_config');
+    if(raw){
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_CERT_CONFIG, ...parsed };
+    }
+  } catch(e){}
+  return DEFAULT_CERT_CONFIG;
+}
+
+function saveCertConfig(){
+  const cfg = {
+    institution: document.getElementById('cert-cfg-inst')?.value.trim() || DEFAULT_CERT_CONFIG.institution,
+    department: document.getElementById('cert-cfg-sub')?.value.trim() || DEFAULT_CERT_CONFIG.department,
+    title: document.getElementById('cert-cfg-title')?.value.trim() || DEFAULT_CERT_CONFIG.title,
+    sigName: document.getElementById('cert-cfg-sig-name')?.value.trim() || DEFAULT_CERT_CONFIG.sigName,
+    sigTitle: document.getElementById('cert-cfg-sig-title')?.value.trim() || DEFAULT_CERT_CONFIG.sigTitle,
+    location: document.getElementById('cert-cfg-location')?.value.trim() || DEFAULT_CERT_CONFIG.location,
+    body: document.getElementById('cert-cfg-body')?.value.trim() || DEFAULT_CERT_CONFIG.body,
+    credits: document.getElementById('cert-cfg-credits')?.value.trim() || DEFAULT_CERT_CONFIG.credits,
+    passPct: DEFAULT_CERT_CONFIG.passPct,
+    honorsPct: DEFAULT_CERT_CONFIG.honorsPct
+  };
+  try {
+    localStorage.setItem('topik_cert_config', JSON.stringify(cfg));
+    alert('Certificate template saved successfully! All newly generated certificates will reflect these changes.');
+  } catch(e){
+    alert('Failed to save certificate template: ' + e.message);
+  }
+}
+
+function populateCertConfigForm(){
+  const cfg = getCertConfig();
+  const setVal = (id, val)=>{ const el=document.getElementById(id); if(el) el.value = val; };
+  setVal('cert-cfg-inst', cfg.institution);
+  setVal('cert-cfg-sub', cfg.department);
+  setVal('cert-cfg-title', cfg.title);
+  setVal('cert-cfg-sig-name', cfg.sigName);
+  setVal('cert-cfg-sig-title', cfg.sigTitle);
+  setVal('cert-cfg-location', cfg.location);
+  setVal('cert-cfg-body', cfg.body);
+  setVal('cert-cfg-credits', cfg.credits);
+}
+
+function previewCustomCert(){
+  const cfg = getCertConfig();
+  const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  showCertificate(98, true, {
+    name: 'SAMPLE STUDENT (샘플 학생)',
+    sid: 'KDU2026-PREVIEW',
+    cohort: '2026-1'
+  });
+}
+
 function showCertificate(pct,advanced,customStudent){
   document.getElementById('cert-level-badge').textContent=advanced?'🏅 ADVANCED LEVEL 2 CERTIFICATE':'📜 TOPIK I CERTIFICATE';
   document.getElementById('cert-sub').textContent=`Score: ${pct}% · ${advanced?'Advanced':'Standard'} · Korean Language Program`;
@@ -1750,16 +1830,20 @@ function showCertificate(pct,advanced,customStudent){
 }
 
 function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
-  const bc=advanced?'#D4A017':'#1B4F8A';
-  const ac=advanced?'#F5C518':'#2E86DE';
-  const lt=advanced?'Advanced — TOPIK I Ready for Level 2':'TOPIK I Vocabulary Completion';
-  const logo=`data:image/jpeg;base64,${KDU_LOGO_B64}`;
+  const cfg = getCertConfig();
+  const bc=advanced?'#D97706':'#4F46E5';
+  const ac=advanced?'#F59E0B':'#38BDF8';
+  const lt=advanced?'Advanced Honors — TOPIK I Ready for Level 2':'TOPIK I Vocabulary Completion';
+  const logo = (typeof VK_LOGO_B64 !== 'undefined' && VK_LOGO_B64)
+    ? `data:image/jpeg;base64,${VK_LOGO_B64}`
+    : 'vk_logo.jpg';
   const cohortDisplay = cohortName || '2026 Spring Semester';
+
   return `<div id="cert-content" style="font-family:Georgia,serif;background:#FEFEFE;padding:32px 28px;border:6px solid ${bc};box-shadow:inset 0 0 0 3px ${ac};">
-    <div style="text-align:center;margin-bottom:16px">
-      <img src="${logo}" style="width:72px;height:auto;margin-bottom:8px;object-fit:contain" alt="KDU Crest">
-      <div style="font-size:12px;font-weight:700;color:#1B4F8A;letter-spacing:3px;text-transform:uppercase">KyungDong University Global</div>
-      <div style="font-size:10px;font-weight:600;color:#D4A017;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Korean Language Program · 쏙쏙 어휘왕 (Vocab-King)</div>
+    <div style="text-align:center;margin-bottom:14px">
+      <img src="${logo}" style="width:72px;height:auto;margin-bottom:6px;object-fit:contain" alt="Vocab-King Logo">
+      <div style="font-size:12px;font-weight:700;color:${bc};letter-spacing:3px;text-transform:uppercase">${cfg.institution}</div>
+      <div style="font-size:10px;font-weight:600;color:#6B7280;letter-spacing:2px;text-transform:uppercase;margin-top:2px">${cfg.department}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,${bc})"></div>
@@ -1767,7 +1851,7 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
       <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,${bc})"></div>
     </div>
     <div style="text-align:center;margin-bottom:12px">
-      <div style="font-size:9px;letter-spacing:4px;color:#888;text-transform:uppercase;margin-bottom:4px">Official Certificate of Academic Achievement</div>
+      <div style="font-size:9px;letter-spacing:4px;color:#888;text-transform:uppercase;margin-bottom:4px">${cfg.title}</div>
       <div style="font-size:19px;font-weight:700;color:#1a1a2e">${lt}</div>
     </div>
     <div style="text-align:center;font-size:11px;color:#777;margin-bottom:4px;font-style:italic">This is proudly awarded to</div>
@@ -1776,12 +1860,10 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
       <span>Student ID: <strong>${sid}</strong></span> · <span>Semester Cohort: <strong>${cohortDisplay}</strong></span>
     </div>
     <div style="text-align:center;font-size:11.5px;color:#444;line-height:1.65;margin-bottom:14px;padding:0 8px">
-      has successfully completed the intensive <strong>쏙쏙 어휘왕 TOPIK I</strong> Vocabulary Curriculum,
-      demonstrating certified mastery of <strong>1,470 Korean vocabulary words</strong> across 5 program days,
-      and fulfilling academic course evaluation criteria with a final examination score of:
+      ${cfg.body}
     </div>
     <div style="text-align:center;margin-bottom:14px">
-      <div style="display:inline-block;background:linear-gradient(135deg,${bc},${ac});color:#fff;font-size:26px;font-weight:900;padding:10px 28px;border-radius:10px;box-shadow:0 4px 12px rgba(27,79,138,0.25)">${pct}%</div>
+      <div style="display:inline-block;background:linear-gradient(135deg,${bc},${ac});color:#fff;font-size:26px;font-weight:900;padding:10px 28px;border-radius:10px;box-shadow:0 4px 12px rgba(79,70,229,0.25)">${pct}%</div>
       <div style="font-size:11px;font-weight:600;color:${bc};margin-top:5px">${advanced?'🏅 Advanced Level 2 Recommendation — Highest Honors':'✓ Standard Level TOPIK I Pass'}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
@@ -1791,11 +1873,11 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end">
       <div style="text-align:center">
-        <div style="font-size:20px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:2px">Hyejoon Yoon</div>
+        <div style="font-size:20px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:2px">${cfg.sigName.replace('Prof. ','')}</div>
         <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
-        <div style="font-size:10px;font-weight:700;color:#222">Prof. Hyejoon Yoon</div>
-        <div style="font-size:8.5px;color:#666">Academic Supervisor &amp; Course Evaluator</div>
-        <div style="font-size:8px;color:#888">Korean Language Program</div>
+        <div style="font-size:10px;font-weight:700;color:#222">${cfg.sigName}</div>
+        <div style="font-size:8.5px;color:#666">${cfg.sigTitle}</div>
+        <div style="font-size:8px;color:#888">${cfg.sigDept || 'Korean Language Program'}</div>
       </div>
       <div style="text-align:center">
         <div style="width:50px;height:50px;border-radius:50%;border:2px solid ${bc};display:flex;align-items:center;justify-content:center;margin:0 auto 4px;background:#fafafa">
@@ -1807,14 +1889,12 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
         <div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:4px">${dateStr}</div>
         <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
         <div style="font-size:10px;font-weight:700;color:#222">Date of Issue</div>
-        <div style="font-size:8.5px;color:#666">Goseong Global Campus</div>
-        <div style="font-size:8px;color:#888">KyungDong University, South Korea</div>
+        <div style="font-size:8.5px;color:#666">${cfg.location}</div>
       </div>
     </div>
-    <div style="margin-top:14px;padding:9px 12px;background:#f8f9fa;border-radius:6px;border:1px solid #e2e8f0;text-align:center;font-size:9px;color:#475569;line-height:1.45">
-      <div><strong>Project Initiated &amp; Developed by:</strong> ALINGILYA CRISPIN NJEWA (Lead Developer / Student Founder)</div>
-      <div><strong>Academic Exactitude &amp; Course Evaluation:</strong> Prof. Hyejoon Yoon (Faculty Supervisor, Korean Language Program)</div>
-      <div style="margin-top:2px;font-size:8px;color:#94a3b8">KYUNGDONG UNIVERSITY GLOBAL · 쏙쏙 어휘왕 TOPIK I CERTIFICATION</div>
+    <div style="margin-top:14px;padding:9px 12px;background:#f8f9fa;border-radius:6px;border:1px solid #e2e8f0;text-align:center;font-size:8.5px;color:#475569;line-height:1.45">
+      <div>${cfg.credits}</div>
+      <div style="margin-top:2px;font-size:8px;color:#94a3b8">${cfg.institution.toUpperCase()} · 쏙쏙 어휘왕 VOCAB-KING CERTIFICATION</div>
     </div>
   </div>`;
 }
@@ -1960,70 +2040,393 @@ document.addEventListener('keydown', e=>{
 });
 
 // ═══════════════════════════════════════════════════
-// ADMIN DASHBOARD — Faculty Portal
-// KDU Korean Program · Protected by passcode
+// ADMIN MANAGEMENT & TWO-TIER FACULTY/DEVELOPER SYSTEM
 // ═══════════════════════════════════════════════════
-const ADMIN_PASSCODES = ['kdu2026', 'admin1234', 'KDU2026'];
-let adminAuthenticated = false;
+const DEFAULT_ADMINS = [
+  {
+    id: 'adm_super_crispin',
+    name: 'Alingilya Crispin Njewa',
+    user: 'crispin',
+    pass: 'admin1234',
+    role: 'super',
+    roleName: 'Lead Developer & Super Admin',
+    created: '2026-03-01'
+  },
+  {
+    id: 'adm_academic_yoon',
+    name: 'Prof. Hyejoon Yoon',
+    user: 'prof_yoon',
+    pass: 'kdu2026',
+    role: 'academic',
+    roleName: 'Academic Supervisor & Course Evaluator',
+    created: '2026-03-01'
+  }
+];
+
+function getAdmins(){
+  try {
+    const raw = localStorage.getItem('topik_admins');
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e){}
+  return DEFAULT_ADMINS;
+}
+
+function saveAdmins(list){
+  try { localStorage.setItem('topik_admins', JSON.stringify(list)); } catch(e){}
+}
+
+let currentAdmin = null;
 let adminCachedStudents = [];
 
-function openAdmin(){
-  adminAuthenticated = false;
+function openAdminLogin(prefillUser=''){
+  // Check if an existing session is saved
+  try {
+    const sessRaw = sessionStorage.getItem('vk_admin_session');
+    if(sessRaw){
+      const sess = JSON.parse(sessRaw);
+      const all = getAdmins();
+      const valid = all.find(a => a.id === sess.id && a.user === sess.user);
+      if(valid){
+        currentAdmin = valid;
+        show('admin');
+        const authCard = document.getElementById('admin-auth-card');
+        const dashCard = document.getElementById('admin-dashboard');
+        if(authCard) authCard.style.display = 'none';
+        if(dashCard) dashCard.style.display = 'block';
+        updateAdminRoleUI();
+        populateCohortSelects();
+        renderAdminDashboard();
+        return;
+      }
+    }
+  } catch(e){}
+
+  currentAdmin = null;
   show('admin');
   const authCard = document.getElementById('admin-auth-card');
   const dashCard = document.getElementById('admin-dashboard');
   if(authCard) authCard.style.display = 'block';
   if(dashCard) dashCard.style.display = 'none';
-  const passInput = document.getElementById('admin-passcode');
-  if(passInput){ passInput.value = ''; setTimeout(()=>passInput.focus(), 200); }
+
+  const userInput = document.getElementById('admin-user-input');
+  const passInput = document.getElementById('admin-pass-input');
   const err = document.getElementById('admin-auth-err');
   if(err) err.style.display = 'none';
+  if(userInput){
+    userInput.value = prefillUser || '';
+    if(!prefillUser) setTimeout(()=>userInput.focus(), 150);
+    else if(passInput) setTimeout(()=>passInput.focus(), 150);
+  }
+  if(passInput) passInput.value = '';
+}
+
+// Backward compatibility alias
+function openAdmin(){
+  openAdminLogin();
 }
 
 function doAdminAuth(){
-  const passEl = document.getElementById('admin-passcode');
+  const userEl = document.getElementById('admin-user-input');
+  const passEl = document.getElementById('admin-pass-input');
   const errEl = document.getElementById('admin-auth-err');
-  const pass = (passEl ? passEl.value : '').trim();
-  if(ADMIN_PASSCODES.includes(pass)){
-    adminAuthenticated = true;
+
+  const username = (userEl ? userEl.value : '').trim().toLowerCase();
+  const password = (passEl ? passEl.value : '').trim();
+
+  if(!username || !password){
+    if(errEl){
+      errEl.style.display = 'block';
+      errEl.textContent = 'Please enter both username and password.';
+    }
+    return;
+  }
+
+  const admins = getAdmins();
+  const match = admins.find(a => a.user.toLowerCase() === username && a.pass === password);
+
+  if(match){
+    currentAdmin = match;
+    try {
+      sessionStorage.setItem('vk_admin_session', JSON.stringify({
+        id: match.id,
+        user: match.user,
+        name: match.name,
+        role: match.role
+      }));
+    } catch(e){}
+
     const authCard = document.getElementById('admin-auth-card');
     const dashCard = document.getElementById('admin-dashboard');
     if(authCard) authCard.style.display = 'none';
     if(dashCard) dashCard.style.display = 'block';
+
+    updateAdminRoleUI();
     populateCohortSelects();
     renderAdminDashboard();
   } else {
-    if(errEl){ errEl.style.display='block'; errEl.textContent='Incorrect passcode. Ask Prof. Hyejoon Yoon for access.'; }
-    if(passEl){ passEl.value=''; passEl.focus(); }
+    if(errEl){
+      errEl.style.display = 'block';
+      errEl.textContent = 'Access restricted: Invalid username or password.';
+    }
+    if(passEl){
+      passEl.value = '';
+      passEl.focus();
+    }
+  }
+}
+
+function updateAdminRoleUI(){
+  if(!currentAdmin) return;
+  const userLabel = document.getElementById('adm-cur-user');
+  if(userLabel){
+    userLabel.textContent = `${currentAdmin.name} (${currentAdmin.roleName || currentAdmin.role})`;
+  }
+
+  // Only Super Admin can manage other administrators
+  const adminTab = document.getElementById('atab-admins');
+  if(adminTab){
+    adminTab.style.display = (currentAdmin.role === 'super') ? 'inline-block' : 'none';
   }
 }
 
 function adminLock(){
-  adminAuthenticated = false;
+  try { sessionStorage.removeItem('vk_admin_session'); } catch(e){}
+  currentAdmin = null;
   show('home');
 }
 
 function switchAdminTab(tab){
-  ['overview','students','cohorts','certs'].forEach(t=>{
+  ['overview','students','cohorts','certs','contact','admins'].forEach(t=>{
     const panel = document.getElementById('apanel-'+t);
     const btn = document.getElementById('atab-'+t);
-    if(panel) panel.style.display = t===tab ? 'block' : 'none';
+    if(panel) panel.style.display = (t === tab) ? 'block' : 'none';
     if(btn){
-      if(t===tab){
-        btn.style.background='var(--gold)'; btn.style.color='var(--navy)'; btn.style.fontWeight='700';
+      if(t === tab){
+        btn.style.background = 'var(--gold)';
+        btn.style.color = 'var(--navy)';
+        btn.style.fontWeight = '700';
       } else {
-        btn.style.background='transparent'; btn.style.color='rgba(255,255,255,0.55)'; btn.style.fontWeight='500';
+        btn.style.background = 'transparent';
+        btn.style.color = 'rgba(255,255,255,0.55)';
+        btn.style.fontWeight = '500';
       }
     }
   });
-  if(tab==='overview') renderAdminOverview();
-  else if(tab==='students') renderAdminStudents();
-  else if(tab==='cohorts') renderAdminCohorts();
-  else if(tab==='certs') renderAdminCerts();
+
+  if(tab === 'overview') renderAdminOverview();
+  else if(tab === 'students') renderAdminStudents();
+  else if(tab === 'cohorts') renderAdminCohorts();
+  else if(tab === 'certs'){
+    populateCertConfigForm();
+    renderAdminCerts();
+  }
+  else if(tab === 'contact') populateContactConfigForm();
+  else if(tab === 'admins') renderAdminList();
 }
 
+// ── ADMIN ACCESS MANAGEMENT (Super Admin Only) ──
+function renderAdminList(){
+  const listEl = document.getElementById('adm-all-admins-list');
+  if(!listEl) return;
+  const admins = getAdmins();
+  listEl.innerHTML = admins.map(a => {
+    const isSuper = a.role === 'super';
+    const canDelete = !isSuper && currentAdmin && currentAdmin.role === 'super' && a.id !== currentAdmin.id;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:6px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#fff">${a.name}</span>
+            <span class="cohort-badge ${isSuper ? 'current' : 'alumni'}" style="font-size:9px;text-transform:uppercase">${a.roleName || a.role}</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px">
+            Username: <code>${a.user}</code> · Created: ${a.created || '2026-03-01'}
+          </div>
+        </div>
+        <div>
+          ${canDelete ? `<button class="btn-ro" style="padding:4px 10px;font-size:10px;border-color:rgba(239,68,68,0.4);color:var(--red)" onclick="deleteAdmin('${a.id}')">Remove ✕</button>` : `<span style="font-size:10px;color:rgba(255,255,255,0.3)">Protected</span>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function addNewAdmin(){
+  if(!currentAdmin || currentAdmin.role !== 'super'){
+    alert('Permission denied. Only the Super Admin (Alingilya Crispin Njewa) can register new administrators.');
+    return;
+  }
+  const name = (document.getElementById('new-adm-name')?.value || '').trim();
+  const user = (document.getElementById('new-adm-user')?.value || '').trim().toLowerCase();
+  const pass = (document.getElementById('new-adm-pass')?.value || '').trim();
+  const role = document.getElementById('new-adm-role')?.value || 'academic';
+
+  if(!name || !user || !pass){
+    alert('Please enter Name, Username, and Password.');
+    return;
+  }
+
+  const admins = getAdmins();
+  if(admins.find(a => a.user.toLowerCase() === user)){
+    alert(`Administrator username "${user}" is already taken. Please choose another username.`);
+    return;
+  }
+
+  const roleNameMap = {
+    super: 'Super Admin & Lead Developer',
+    academic: 'Academic Admin (Faculty / Supervisor)',
+    'co-admin': 'Co-Administrator'
+  };
+
+  const newAdmin = {
+    id: 'adm_' + Date.now(),
+    name,
+    user,
+    pass,
+    role,
+    roleName: roleNameMap[role] || 'Administrator',
+    created: new Date().toISOString().slice(0, 10)
+  };
+
+  admins.push(newAdmin);
+  saveAdmins(admins);
+  renderAdminList();
+
+  if(document.getElementById('new-adm-name')) document.getElementById('new-adm-name').value = '';
+  if(document.getElementById('new-adm-user')) document.getElementById('new-adm-user').value = '';
+  if(document.getElementById('new-adm-pass')) document.getElementById('new-adm-pass').value = '';
+
+  alert(`Administrator account for "${name}" created successfully! They can now sign in with username "${user}".`);
+}
+
+function deleteAdmin(adminId){
+  if(!currentAdmin || currentAdmin.role !== 'super') return;
+  const admins = getAdmins();
+  const target = admins.find(a => a.id === adminId);
+  if(!target) return;
+  if(!confirm(`Are you sure you want to remove administrator "${target.name}"?`)) return;
+
+  const filtered = admins.filter(a => a.id !== adminId);
+  saveAdmins(filtered);
+  renderAdminList();
+}
+
+// ── CONTACT US CONFIGURATION & RENDERER ──
+const DEFAULT_CONTACT_CONFIG = {
+  email: 'korean@kduniv.ac.kr',
+  phone: '+82-33-639-0114',
+  office: 'KyungDong University Global Campus, Global Hall #304, Goseong-gun, Gangwon-do, South Korea',
+  website: 'https://global.kduniv.ac.kr',
+  instagram: '@kdu_global',
+  youtube: 'https://youtube.com/@KDUGlobal',
+  kakaotalk: 'KDU Korean Support Channel'
+};
+
+function getContactConfig(){
+  try {
+    const raw = localStorage.getItem('topik_contact_config');
+    if(raw){
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_CONTACT_CONFIG, ...parsed };
+    }
+  } catch(e){}
+  return DEFAULT_CONTACT_CONFIG;
+}
+
+function saveContactConfig(){
+  const cfg = {
+    email: document.getElementById('cfg-contact-email')?.value.trim() || DEFAULT_CONTACT_CONFIG.email,
+    phone: document.getElementById('cfg-contact-phone')?.value.trim() || DEFAULT_CONTACT_CONFIG.phone,
+    office: document.getElementById('cfg-contact-office')?.value.trim() || DEFAULT_CONTACT_CONFIG.office,
+    website: document.getElementById('cfg-contact-website')?.value.trim() || DEFAULT_CONTACT_CONFIG.website,
+    instagram: document.getElementById('cfg-contact-instagram')?.value.trim() || DEFAULT_CONTACT_CONFIG.instagram,
+    youtube: document.getElementById('cfg-contact-youtube')?.value.trim() || DEFAULT_CONTACT_CONFIG.youtube,
+    kakaotalk: document.getElementById('cfg-contact-kakaotalk')?.value.trim() || DEFAULT_CONTACT_CONFIG.kakaotalk
+  };
+  try {
+    localStorage.setItem('topik_contact_config', JSON.stringify(cfg));
+    alert('Contact channels and social media information updated successfully!');
+    renderContactPage();
+  } catch(e){
+    alert('Failed to save contact settings: ' + e.message);
+  }
+}
+
+function populateContactConfigForm(){
+  const cfg = getContactConfig();
+  const setVal = (id, val)=>{ const el = document.getElementById(id); if(el) el.value = val; };
+  setVal('cfg-contact-email', cfg.email);
+  setVal('cfg-contact-phone', cfg.phone);
+  setVal('cfg-contact-office', cfg.office);
+  setVal('cfg-contact-website', cfg.website);
+  setVal('cfg-contact-instagram', cfg.instagram);
+  setVal('cfg-contact-youtube', cfg.youtube);
+  setVal('cfg-contact-kakaotalk', cfg.kakaotalk);
+}
+
+function renderContactPage(){
+  const card = document.getElementById('contact-info-card');
+  if(!card) return;
+  const cfg = getContactConfig();
+
+  card.innerHTML = `
+    <div class="contact-item">
+      <div class="contact-icon">✉️</div>
+      <div>
+        <div class="contact-label">Official Inquiries &amp; Support</div>
+        <div class="contact-value"><a href="mailto:${cfg.email}">${cfg.email}</a></div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">📞</div>
+      <div>
+        <div class="contact-label">Telephone</div>
+        <div class="contact-value"><a href="tel:${cfg.phone.replace(/[^0-9+]/g,'')}">${cfg.phone}</a></div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">🏫</div>
+      <div>
+        <div class="contact-label">Campus &amp; Department Location</div>
+        <div class="contact-value">${cfg.office}</div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">🌐</div>
+      <div>
+        <div class="contact-label">Official Website</div>
+        <div class="contact-value"><a href="${cfg.website}" target="_blank" rel="noopener noreferrer">${cfg.website}</a></div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">📸</div>
+      <div>
+        <div class="contact-label">Instagram</div>
+        <div class="contact-value"><a href="${cfg.instagram.startsWith('http') ? cfg.instagram : 'https://instagram.com/' + cfg.instagram.replace('@','')}" target="_blank" rel="noopener noreferrer">${cfg.instagram}</a></div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">▶️</div>
+      <div>
+        <div class="contact-label">YouTube Channel</div>
+        <div class="contact-value"><a href="${cfg.youtube}" target="_blank" rel="noopener noreferrer">${cfg.youtube}</a></div>
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-icon">💬</div>
+      <div>
+        <div class="contact-label">KakaoTalk Community</div>
+        <div class="contact-value">${cfg.kakaotalk}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── ADMIN DASHBOARD DATA & ANALYTICS ──
 async function renderAdminDashboard(){
-  if(!adminAuthenticated) return;
+  if(!currentAdmin) return;
   const [studentsRaw, progRaw, failRaw] = await Promise.all([
     sbFetch('/rest/v1/students?select=*&limit=500'),
     sbFetch('/rest/v1/progress?select=*&limit=3000'),
@@ -2112,7 +2515,7 @@ async function renderAdminDashboard(){
   if(weakWordsEl){
     const sorted = Object.entries(failWordMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
     if(sorted.length===0){
-      weakWordsEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:12px">No fail data yet</div>';
+      weakWordsEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:12px">No fail data recorded yet</div>';
     } else {
       weakWordsEl.innerHTML = sorted.map(([w,cnt],i)=>{
         const wObj = allWords().find(x=>cleanKR(x.w)===cleanKR(w)||x.w===w);
@@ -2128,7 +2531,7 @@ async function renderAdminDashboard(){
     }
   }
 
-  switchAdminTab('overview');
+  renderAdminOverview();
 }
 
 function renderAdminOverview(){
@@ -2208,18 +2611,19 @@ function renderAdminCerts(){
     tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.4);padding:24px">No certified students yet.</td></tr>';
     return;
   }
+  const certCfg = getCertConfig();
   tbody.innerHTML = certified.map(s=>{
     const cObj = cohortMap[s.cohort];
     const cName = cObj ? cObj.name.replace(' (Current)','') : (s.cohort||'—');
     const isCur = cObj ? cObj.active : false;
-    const isAdv = (s.examScore||0) >= 95;
+    const isAdv = (s.examScore||0) >= (certCfg.honorsPct || 95);
     return `<tr>
       <td style="font-family:monospace;font-size:11px">${s.sid||'—'}</td>
       <td><strong>${s.name||'—'}</strong>${s.nick?` <span style="font-size:10px;color:rgba(255,255,255,0.4)">(${s.nick})</span>`:''}</td>
       <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${cName}</span></td>
       <td style="text-align:center;font-weight:700;color:${isAdv?'#D4A017':'#22c55e'}">${s.examScore||0}%</td>
       <td>${isAdv ? '🏅 Advanced' : '✓ Standard'}</td>
-      <td style="font-size:10px;color:rgba(255,255,255,0.5)">Prof. Hyejoon Yoon</td>
+      <td style="font-size:10px;color:rgba(255,255,255,0.5)">${certCfg.sigName}</td>
       <td><button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert('${s.sid}')">📜 Preview</button></td>
     </tr>`;
   }).join('');
@@ -2271,7 +2675,8 @@ function toggleCohortActive(id){
 function viewStudentCert(sid){
   const s = adminCachedStudents.find(x=>x.sid===sid);
   if(!s || !s.examPassed) return;
-  const advanced = (s.examScore||0) >= 95;
+  const cfg = getCertConfig();
+  const advanced = (s.examScore||0) >= (cfg.honorsPct || 95);
   const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const cohortObj = getCohorts().find(c=>c.id===s.cohort);
   const cohortName = cohortObj ? cohortObj.name.replace(' (Current)','') : (s.cohort||'2026 Spring');

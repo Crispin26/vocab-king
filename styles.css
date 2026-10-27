@@ -1,12 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Poppins:wght@400;600;700;800;900&display=swap');
-:root{--navy:#0D1B2A;--blue:#1B4F8A;--sky:#2E86DE;--gold:#F5C518;--gd:#D4A017;--red:#E74C3C;--green:#27AE60;--text:#1A1A2E}
+:root{--navy:#0F0A2B;--indigo:#1A1040;--purple:#2D1B69;--blue:#4F46E5;--sky:#38BDF8;--gold:#F59E0B;--gd:#D97706;--coral:#F43F5E;--red:#EF4444;--green:#22C55E;--text:#1E1B4B}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'Poppins','Noto Sans KR',sans-serif;background:var(--navy);color:#fff;min-height:100vh;overflow-x:hidden}
 .screen{display:none;min-height:100vh;flex-direction:column}.screen.active{display:flex}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
 /* INTRO */
-#intro{background:linear-gradient(160deg,#050D16 0%,#0D1B2A 40%,#1B4F8A 100%);align-items:center;justify-content:center;padding:30px 20px;position:relative;overflow:hidden}
+#intro{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 40%,#2D1B69 100%);align-items:center;justify-content:center;padding:30px 20px;position:relative;overflow:hidden}
 #intro::before{content:'어휘왕';position:absolute;font-size:180px;font-weight:900;color:rgba(255,255,255,0.025);bottom:-20px;right:-30px;font-family:'Noto Sans KR';pointer-events:none}
 .ii{max-width:460px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center}
 .logo-box{width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,var(--gold),var(--gd));display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:18px;box-shadow:0 6px 28px rgba(245,197,24,0.4)}
@@ -27,7 +27,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .ver{font-size:10px;color:rgba(255,255,255,0.18);margin-top:14px}
 
 /* REGISTER */
-#register{background:linear-gradient(160deg,#050D16 0%,#0D1B2A 50%,#1B4F8A 100%);align-items:center;justify-content:center;padding:30px 20px}
+#register{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 50%,#2D1B69 100%);align-items:center;justify-content:center;padding:30px 20px}
 .ri{max-width:420px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center}
 .rcard{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px 20px;display:flex;flex-direction:column;gap:14px;text-align:left;margin-top:18px}
 .rlabel{font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px}
@@ -38,7 +38,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .rskip{font-size:11px;color:rgba(255,255,255,0.28);margin-top:16px}.rskip span{color:var(--gold);cursor:pointer;text-decoration:underline}
 
 /* HOME */
-#home{background:linear-gradient(160deg,#0D1B2A 0%,#1B4F8A 55%,#2E86DE 100%);align-items:center;padding:0 16px 36px;position:relative;overflow:hidden}
+#home{background:linear-gradient(160deg,#1A1040 0%,#2D1B69 55%,#4F46E5 100%);align-items:center;padding:0 16px 36px;position:relative;overflow:hidden}
 #home::before{content:'한국어';position:absolute;font-size:150px;font-weight:900;color:rgba(255,255,255,0.025);top:-10px;right:-15px;font-family:'Noto Sans KR';pointer-events:none}
 .hi{max-width:520px;width:100%;display:flex;flex-direction:column;align-items:center;padding-top:38px}
 .htopbar{display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:14px}
@@ -88,7 +88,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .btn-outline:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.38)}
 
 /* LEADERBOARD */
-#leaderboard{background:linear-gradient(160deg,var(--navy) 0%,#1B4F8A 100%);align-items:center;padding:30px 20px 40px;overflow-y:auto}
+#leaderboard{background:linear-gradient(160deg,var(--navy) 0%,#2D1B69 100%);align-items:center;padding:30px 20px 40px;overflow-y:auto}
 .lb-inner{max-width:460px;width:100%;display:flex;flex-direction:column;gap:16px}
 .lb-header{display:flex;align-items:center;justify-content:space-between}
 .lb-title{font-size:20px;font-weight:800}
@@ -109,7 +109,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .tab-inactive{background:transparent!important;color:rgba(255,255,255,0.5)!important;}
 
 /* DICTIONARY SCREEN */
-#dictionary{background:linear-gradient(160deg,var(--navy) 0%,#1B4F8A 100%);align-items:center;padding:24px 16px 40px;overflow-y:auto}
+#dictionary{background:linear-gradient(160deg,var(--navy) 0%,#2D1B69 100%);align-items:center;padding:24px 16px 40px;overflow-y:auto}
 .dict-inner{max-width:640px;width:100%;display:flex;flex-direction:column;gap:14px}
 .dict-header{display:flex;align-items:center;justify-content:space-between}
 .dict-title{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
@@ -207,7 +207,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 @media(hover:none) and (pointer:coarse){.kbd-hint{display:none}}
 
 /* RESULTS */
-#results{background:linear-gradient(160deg,var(--navy) 0%,#1B4F8A 100%);align-items:center;padding:36px 20px;gap:14px;text-align:center;overflow-y:auto}
+#results{background:linear-gradient(160deg,var(--navy) 0%,#2D1B69 100%);align-items:center;padding:36px 20px;gap:14px;text-align:center;overflow-y:auto}
 .rbadge{font-size:11px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase}
 .sring{width:136px;height:136px;border-radius:50%;background:conic-gradient(var(--gold) var(--pct,0%),rgba(255,255,255,0.1) 0%);display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 0 32px rgba(245,197,24,0.2)}
 .sring::before{content:'';position:absolute;width:106px;height:106px;border-radius:50%;background:var(--navy)}
@@ -228,7 +228,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 /* FINAL EXAM */
 #exam{background:#F0F4F8;color:var(--text)}
-#exam-intro{background:linear-gradient(160deg,var(--navy) 0%,#1B4F8A 100%);align-items:center;justify-content:center;padding:30px 20px}
+#exam-intro{background:linear-gradient(160deg,var(--navy) 0%,#2D1B69 100%);align-items:center;justify-content:center;padding:30px 20px}
 .ei{max-width:440px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}
 .exam-badge{background:linear-gradient(135deg,var(--gold),var(--gd));color:var(--navy);font-size:11px;font-weight:800;padding:6px 18px;border-radius:20px;letter-spacing:2px;text-transform:uppercase}
 .exam-title{font-size:clamp(28px,8vw,44px);font-weight:900;line-height:1.1}
@@ -244,7 +244,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .btn-start-exam{background:linear-gradient(135deg,var(--gold),var(--gd));color:var(--navy);border:none;padding:16px 0;border-radius:50px;font-size:17px;font-weight:900;cursor:pointer;width:100%;box-shadow:0 6px 24px rgba(245,197,24,0.4)}
 
 /* CERTIFICATE */
-#cert-screen{background:linear-gradient(160deg,var(--navy) 0%,#1B4F8A 100%);align-items:center;justify-content:center;padding:30px 20px;overflow-y:auto}
+#cert-screen{background:linear-gradient(160deg,var(--navy) 0%,#2D1B69 100%);align-items:center;justify-content:center;padding:30px 20px;overflow-y:auto}
 .cert-wrap{max-width:440px;width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
 .cert-congrats{font-size:clamp(28px,8vw,40px);font-weight:900;text-align:center}
 .cert-congrats .g{color:var(--gold)}
@@ -257,4 +257,81 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 /* EXAM FAILED */
 .fail-box{background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.3);border-radius:18px;padding:24px;text-align:center;width:100%}
 .fail-score{font-size:48px;font-weight:900;color:var(--red)}
-.fail-msg{font-size:14px;color:rgba(255,255,255,0.6);margin-top:8px}
+/* KDU OFFICIAL LOGO & ATTRIBUTION */
+.logo-box{width:84px;height:84px;border-radius:22px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;margin-bottom:18px;overflow:hidden}
+.kdu-hero-logo{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.3))}
+.kdu-credit-box{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:12px 14px;margin-top:14px;display:flex;flex-direction:column;gap:6px;font-size:11px;text-align:left}
+.kdu-credit-row{display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.78)}
+.kdu-credit-tag{font-size:9px;font-weight:700;color:var(--gold);background:rgba(245,197,24,0.15);padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0}
+
+/* COHORT BADGES */
+.cohort-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(46,134,222,0.18);color:var(--sky);border:1px solid rgba(46,134,222,0.35);letter-spacing:0.5px}
+.cohort-badge.current{background:rgba(245,197,24,0.18);color:var(--gold);border-color:rgba(245,197,24,0.4)}
+.cohort-badge.alumni{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-color:rgba(255,255,255,0.2)}
+
+/* ADMIN DASHBOARD */
+#admin{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 45%,#2D1B69 100%);min-height:100vh;padding:24px 14px 44px;overflow-y:auto}
+.admin-wrap{width:100%;display:flex;flex-direction:column;align-items:center}
+.admin-tab{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.1);padding:9px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all 0.2s}
+.admin-tab:hover,.admin-tab.active{background:var(--gold);color:var(--navy);border-color:var(--gold);box-shadow:0 4px 16px rgba(245,197,24,0.3)}
+.admin-panel{display:flex;flex-direction:column;gap:16px;width:100%}
+.admin-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;width:100%}
+.admin-stat-card{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;text-align:left}
+.admin-stat-num{font-size:28px;font-weight:900;color:var(--gold);line-height:1.1;margin-top:4px}
+.admin-stat-lbl{font-size:10px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.5px}
+.admin-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:18px}
+.admin-table-wrap{width:100%;overflow-x:auto;margin-top:10px;background:rgba(0,0,0,0.2);border-radius:12px;border:1px solid rgba(255,255,255,0.08)}
+.admin-table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
+.admin-table th{padding:11px 12px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-weight:700;border-bottom:1px solid rgba(255,255,255,0.1);white-space:nowrap;text-transform:uppercase;font-size:10px;letter-spacing:0.5px}
+.admin-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.85);white-space:nowrap}
+.admin-table tr:hover td{background:rgba(255,255,255,0.04)}
+.btn-admin-action{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all 0.15s}
+.btn-admin-action:hover{background:var(--sky);border-color:var(--sky)}
+
+
+/* ABOUT PAGE */
+#about{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 45%,#2D1B69 100%);align-items:center;padding:30px 20px 50px;overflow-y:auto}
+.about-inner{max-width:520px;width:100%;display:flex;flex-direction:column;gap:20px}
+.about-back{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start}
+.about-logo-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:24px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:22px}
+.about-logo{width:110px;height:110px;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(79,70,229,0.5))}
+.about-section{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:18px}
+.about-section-title{font-size:12px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.about-team-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.about-team-row:last-child{border-bottom:none}
+.about-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--sky));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.about-team-info{flex:1}
+.about-team-name{font-size:14px;font-weight:700;color:#fff}
+.about-team-role{font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px}
+.about-tag{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.18);color:var(--gold);border:1px solid rgba(245,158,11,0.3);margin-top:3px;letter-spacing:0.5px;text-transform:uppercase}
+
+/* CONTACT PAGE */
+#contact{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 45%,#2D1B69 100%);align-items:center;padding:30px 20px 50px;overflow-y:auto}
+.contact-inner{max-width:480px;width:100%;display:flex;flex-direction:column;gap:16px}
+.contact-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.contact-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.contact-item:last-child{border-bottom:none}
+.contact-icon{width:38px;height:38px;border-radius:10px;background:rgba(79,70,229,0.2);border:1px solid rgba(79,70,229,0.35);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.contact-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px}
+.contact-value{font-size:13px;color:#fff;font-weight:600;margin-top:1px}
+.contact-value a{color:var(--sky);text-decoration:none}
+
+/* ADMIN LOGIN */
+#admin-login{background:linear-gradient(160deg,#0F0A2B 0%,#1A1040 45%,#2D1B69 100%);align-items:center;justify-content:center;padding:30px 20px}
+.admin-login-card{max-width:380px;width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:24px;padding:30px 24px;display:flex;flex-direction:column;gap:16px;text-align:center}
+.admin-login-logo{width:72px;height:72px;object-fit:contain;margin:0 auto;filter:drop-shadow(0 6px 20px rgba(79,70,229,0.5))}
+.admin-role-badge{display:inline-block;font-size:10px;font-weight:700;padding:4px 14px;border-radius:20px;background:rgba(79,70,229,0.2);color:var(--sky);border:1px solid rgba(79,70,229,0.4);letter-spacing:1px;text-transform:uppercase;margin:0 auto}
+
+/* ADMIN CONTACT EDITOR */
+.admin-contact-form{display:flex;flex-direction:column;gap:12px}
+.admin-contact-row{display:flex;gap:10px;align-items:center}
+.admin-contact-row .rinput{flex:1}
+.admin-contact-row label{font-size:10px;color:rgba(255,255,255,0.5);min-width:60px;text-transform:uppercase;font-weight:700}
+
+/* ADMIN CERT EDITOR */
+.cert-editor-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.cert-editor-row{display:flex;flex-direction:column;gap:4px}
+.cert-editor-row label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.5px}
+.cert-editor-row .rinput{font-size:12px;padding:10px 12px}
+.cert-editor-row textarea{width:100%;min-height:60px;padding:10px 12px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;font-size:12px;font-family:'Poppins','Noto Sans KR',sans-serif;resize:vertical;outline:none}
+.cert-editor-row textarea:focus{border-color:var(--gold)}

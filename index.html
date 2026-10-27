@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<meta name="theme-color" content="#0D1B2A">
+<meta name="theme-color" content="#0F0A2B">
 <title>쏙쏙 어휘왕 · Vocab King v3</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
@@ -13,24 +13,34 @@
 <!-- INTRO -->
 <div id="intro" class="screen active">
 <div class="ii">
-  <div class="logo-box">📚</div>
-  <div class="kdu-pill">🎓 KDU Korean Program · 2026</div>
+  <div class="logo-box">
+    <img src="vk_logo.jpg" alt="Vocab-King Logo" class="kdu-hero-logo" style="width:110px;height:auto;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(79,70,229,0.45));">
+  </div>
+  <div class="kdu-pill">TOPIK I · Korean Vocabulary King</div>
   <div class="ititle">쏙쏙 <span class="g">어휘왕</span></div>
-  <div class="isub">TOPIK I · Vocab King · v3</div>
+  <div class="isub">Vocab-King · Learn Korean. Learn Confidently.</div>
   <div class="idiv"></div>
   <div class="idesc">
-    <div class="idesc-en">This program was <strong>built by ALINGILYA CRISPIN NJEWA</strong> to master all <strong>1,470 essential TOPIK I vocabulary words</strong> from the <em>쏙쏙 한국어 어휘왕</em> textbook — organized across 5 intensive program days, each containing multiple book-day sub-levels. Study smart, focus on words you miss, and repeat until mastered.</div>
-    <div class="idesc-kr">이 프로그램은 TOPIK I 시험 준비를 위해 만든 어휘 학습 게임입니다.<br>5일 집중 학습 · 각 날에 여러 레벨 · 화이팅! 🔥</div>
+    <div class="idesc-en">
+      Master all <strong>1,470 essential TOPIK I vocabulary words</strong> across 5 intensive program days.
+      Practice with audio pronunciation, test your recall with intelligent quizzes, review tricky words, and earn your official certification.
+    </div>
+    <div class="idesc-kr">
+      5일 완성 1,470개 한국어 필수 어휘 학습 프로그램. 원어민 발음 듣기, 스마트 퀴즈, 오답 복습 및 최종 시험을 통해 한국어 실력을 탄탄하게 키워보세요.
+    </div>
   </div>
   <div class="ifeats">
-    <div class="ifeat"><div class="ifeat-i">📖</div><div class="ifeat-t">1,470 words from<br><strong>your exact book</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">🧠</div><div class="ifeat-t">Smart repeat for<br><strong>words you miss</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">🏆</div><div class="ifeat-t">Class leaderboard<br><strong>&amp; scores</strong></div></div>
-    <div class="ifeat"><div class="ifeat-i">💾</div><div class="ifeat-t">Progress saved<br><strong>automatically</strong></div></div>
+    <div class="ifeat"><div class="ifeat-i">📖</div><div class="ifeat-t">1,470 Words from<br><strong>Curriculum Days 1–49</strong></div></div>
+    <div class="ifeat"><div class="ifeat-i">🔊</div><div class="ifeat-t">Native Audio<br><strong>Pronunciation</strong></div></div>
+    <div class="ifeat"><div class="ifeat-i">🧠</div><div class="ifeat-t">Study First &amp;<br><strong>Smart Quiz Review</strong></div></div>
+    <div class="ifeat"><div class="ifeat-i">📜</div><div class="ifeat-t">TOPIK I Official<br><strong>Certificate of Mastery</strong></div></div>
   </div>
-  <div class="iauthor">Built by <strong>ALINGILYA CRISPIN NJEWA</strong> · KDU Korean Program</div>
-  <button class="btn-enter" id="intro-btn">시작하기 · Let's Start! 🚀</button>
-  <div class="ver">쏙쏙 어휘왕 · 5 Program Days · Book Days 1–49 · v3.0</div>
+  <button class="btn-enter" id="intro-btn">시작하기 · Start Learning! 🚀</button>
+  <div style="display:flex;gap:12px;margin-top:14px;width:100%;justify-content:center">
+    <button class="btn-ro" style="flex:1;font-size:11px;padding:9px 12px;border-radius:20px" onclick="show('about')">ℹ️ About the App</button>
+    <button class="btn-ro" style="flex:1;font-size:11px;padding:9px 12px;border-radius:20px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
+  </div>
+  <div class="ver" style="margin-top:12px">Vocab-King · KDU Global TOPIK I · 5 Program Days · Book Days 1–49</div>
 </div>
 </div>
 
@@ -55,6 +65,8 @@
       <input id="reg-name" class="rinput" type="text" placeholder="e.g. ALINGILYA CRISPIN NJEWA" autocomplete="name"></div>
     <div><label class="rlabel" for="reg-id">Student ID *</label>
       <input id="reg-id" class="rinput" type="text" placeholder="e.g. KDU2024001" autocomplete="off"></div>
+    <div><label class="rlabel" for="reg-cohort">Semester Cohort (학기 구분) *</label>
+      <select id="reg-cohort" class="rinput dict-select" style="width:100%;background:rgba(255,255,255,0.08);color:#fff"></select></div>
     <div><label class="rlabel" for="reg-nick">Korean Nickname (선택사항)</label>
       <input id="reg-nick" class="rinput" style="font-family:'Noto Sans KR',sans-serif" type="text" placeholder="e.g. 크리스핀 (optional)"></div>
     <div id="reg-err" class="rerr"></div>
@@ -83,16 +95,21 @@
 <div id="home" class="screen">
 <div class="hi">
   <div class="htopbar">
-    <div class="hlogo">쏙쏙 <span>어휘왕</span></div>
+    <div class="hlogo" style="display:flex;align-items:center;gap:8px">
+      <img src="vk_logo.jpg" alt="Vocab-King Logo" style="width:30px;height:auto;border-radius:6px">
+      <div>Vocab-<span>King</span> <span style="font-size:12px;color:rgba(255,255,255,0.45);font-weight:600">어휘왕</span></div>
+    </div>
     <div class="hbtns">
       <button class="hbtn" onclick="openDictionary()" title="Searchable Dictionary (1,470 Words)" aria-label="Open Dictionary">🔍</button>
       <button class="hbtn" onclick="show('leaderboard');renderLB()" title="Leaderboard" aria-label="Open Leaderboard">🏆</button>
-      <button class="hbtn" onclick="show('intro')" title="About" aria-label="About">ℹ️</button>
+      <button class="hbtn" onclick="show('about')" title="About the App &amp; Initiators" aria-label="About the App">ℹ️</button>
+      <button class="hbtn" onclick="show('contact');renderContactPage()" title="Contact Us" aria-label="Contact Us">📬</button>
+      <button class="hbtn" onclick="openAdminLogin()" title="Admin &amp; Faculty Access" aria-label="Admin Access">🔐</button>
     </div>
   </div>
   <div id="welcome-strip"></div>
   <div class="htitle">어휘<span class="hg">왕</span></div>
-  <div class="hsub">TOPIK I · 1470 Words · 5 Program Days</div>
+  <div class="hsub">Vocab-King · TOPIK I · 1,470 Words · 5 Days</div>
   <div class="stats-row">
     <div class="sc"><div class="sn" id="sL">0</div><div class="sl">Done</div></div>
     <div class="sc"><div class="sn" id="sF">0</div><div class="sl">Review</div></div>
@@ -103,6 +120,10 @@
   <button class="btn-outline" id="fail-btn" style="display:none">⚡ Review All Failed Words (<span id="fcnt">0</span>)</button>
   <button class="btn-outline" id="dict-home-btn" onclick="openDictionary()">🔍 &nbsp;Searchable Dictionary · 단어 사전 (1,470 Words)</button>
   <button class="btn-outline" onclick="show('exam-intro')" style="margin-top:6px;border-color:rgba(245,197,24,0.4);color:var(--gold)">📝 &nbsp;Take Final Exam · 시험 보기</button>
+  <div style="display:flex;gap:10px;margin-top:20px;width:100%;justify-content:center">
+    <button class="btn-ro" style="flex:1;font-size:12px;padding:10px;border-radius:24px" onclick="show('about')">ℹ️ About the App</button>
+    <button class="btn-ro" style="flex:1;font-size:12px;padding:10px;border-radius:24px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
+  </div>
 </div>
 </div>
 
@@ -144,6 +165,12 @@
   <div class="lb-header">
     <div class="lb-title">🏆 Class Leaderboard</div>
     <button class="lb-close" onclick="show('home')" aria-label="Close Leaderboard">✕</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0 16px;background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)">
+    <label for="lb-cohort-filter" style="font-size:11px;color:rgba(255,255,255,0.6);font-weight:700;text-transform:uppercase;white-space:nowrap">Cohort:</label>
+    <select id="lb-cohort-filter" class="dict-select" style="flex:1;background:rgba(255,255,255,0.08);color:#fff" onchange="filterLBByCohort(this.value)">
+      <option value="all">All Semesters (전체 학기)</option>
+    </select>
   </div>
   <div class="lb-top3" id="lb-top3"></div>
   <div class="lb-list" id="lb-list"></div>
@@ -292,6 +319,416 @@
   <button class="btn-start-exam" onclick="show('exam-intro')">Try Again 🔄</button>
   <button class="btn-try-again" onclick="show('home')">← Study More First</button>
 </div>
+</div>
+</div>
+
+<!-- ADMIN & FACULTY BACKEND ("Behind the scenes") -->
+<div id="admin" class="screen">
+  <div class="admin-wrap">
+    <!-- Admin Auth Card -->
+    <div id="admin-auth-card" class="rcard" style="max-width:390px;margin:50px auto 0;text-align:center;">
+      <div style="width:80px;height:80px;margin:0 auto 14px;border-radius:20px;overflow:hidden;background:rgba(255,255,255,0.06);padding:6px;border:1.5px solid rgba(245,158,11,0.4)">
+        <img src="vk_logo.jpg" alt="Vocab-King Logo" style="width:100%;height:100%;object-fit:contain">
+      </div>
+      <div class="kdu-pill">Administrator &amp; Faculty Portal</div>
+      <div class="ititle" style="font-size:24px;margin:10px 0 4px">Vocab-King <span class="g">Admin</span></div>
+      <div class="isub" style="font-size:11px;margin-bottom:14px">Management &amp; Course Evaluation</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:14px;text-align:left;line-height:1.6;background:rgba(255,255,255,0.04);padding:10px;border-radius:10px">
+        Sign in with your administrator credentials to manage semester cohorts, customize certificates, evaluate curriculum analytics, and configure contact channels.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;text-align:left">
+        <div>
+          <label class="rlabel" for="admin-user-input">Admin Username</label>
+          <input id="admin-user-input" class="rinput" type="text" placeholder="Username" autocomplete="username">
+        </div>
+        <div>
+          <label class="rlabel" for="admin-pass-input">Password</label>
+          <input id="admin-pass-input" class="rinput" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAdminAuth()">
+        </div>
+      </div>
+      <div id="admin-auth-err" class="rerr" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn-ro" style="flex:1" onclick="show('home')">← Back to App</button>
+        <button class="btn-rg" style="flex:1.4" onclick="doAdminAuth()">Sign In 🔓</button>
+      </div>
+    </div>
+
+    <!-- Main Admin Dashboard (Shown after authentication) -->
+    <div id="admin-dashboard" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="vk_logo.jpg" alt="Vocab-King Logo" style="width:48px;height:auto;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+          <div>
+            <div style="font-size:18px;font-weight:900;color:#fff;">Vocab-King · Admin &amp; Faculty Portal</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);">Logged in as: <strong id="adm-cur-user" style="color:var(--gold)">Admin</strong></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="hbtn" onclick="show('home')" title="Back to App" style="width:auto;border-radius:20px;padding:0 14px;font-size:12px;">← Return to App</button>
+          <button class="hbtn" onclick="adminLock()" title="Lock Admin Portal" style="width:auto;border-radius:20px;padding:0 14px;font-size:12px;background:rgba(239,68,68,0.2);color:var(--red);border:1px solid rgba(239,68,68,0.4)">🔒 Lock</button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;">
+        <button id="atab-overview" class="admin-tab active" onclick="switchAdminTab('overview')">📊 Overview &amp; Analytics</button>
+        <button id="atab-students" class="admin-tab" onclick="switchAdminTab('students')">👥 Students Roster</button>
+        <button id="atab-cohorts" class="admin-tab" onclick="switchAdminTab('cohorts')">🎓 Semester Cohorts</button>
+        <button id="atab-certs" class="admin-tab" onclick="switchAdminTab('certs')">📜 Certificate Customizer &amp; Audit</button>
+        <button id="atab-contact" class="admin-tab" onclick="switchAdminTab('contact')">📬 Contact Us Settings</button>
+        <button id="atab-admins" class="admin-tab" onclick="switchAdminTab('admins')">🛡️ Admin Access</button>
+      </div>
+
+      <!-- Panel 1: Overview & Analytics -->
+      <div id="apanel-overview" class="admin-panel">
+        <div class="admin-stat-grid">
+          <div class="admin-stat-card">
+            <div class="admin-stat-lbl">Total Students</div>
+            <div class="admin-stat-num" id="adm-stat-total">0</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-lbl">Active Semester Cohort</div>
+            <div class="admin-stat-num" id="adm-stat-active-cohort" style="font-size:18px;color:var(--sky)">-</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-lbl">Words Mastered</div>
+            <div class="admin-stat-num" id="adm-stat-words">0</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-lbl">Certified Students</div>
+            <div class="admin-stat-num" id="adm-stat-passed" style="color:var(--green)">0</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+          <!-- Cohort Breakdown Card -->
+          <div class="admin-card">
+            <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px;display:flex;justify-content:space-between">
+              <span>🎓 Students by Semester Cohort</span>
+              <span id="adm-cohort-count" style="font-size:11px;color:rgba(255,255,255,0.4)"></span>
+            </div>
+            <div id="adm-cohort-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+
+          <!-- Academic Weak Words Insights Card (For Prof. Hyejoon Yoon to target courses) -->
+          <div class="admin-card">
+            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px;display:flex;justify-content:space-between">
+              <span>⚠️ Top Challenging Words (Curriculum Focus)</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.4)">Course Evaluation</span>
+            </div>
+            <div id="adm-weak-words" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Students Roster -->
+      <div id="apanel-students" class="admin-panel" style="display:none">
+        <div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+            <div style="font-size:14px;font-weight:700;color:#fff">👥 Student Roster &amp; Cohort Differentiation</div>
+            <button class="btn-rg" style="padding:8px 16px;font-size:12px;border-radius:20px" onclick="exportStudentsCSV()">⬇️ Export Roster (CSV)</button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <input id="adm-student-search" type="search" placeholder="Search by name, nickname or student ID..." class="dict-search" style="flex:2;min-width:200px" oninput="renderAdminStudents()">
+            <select id="adm-student-cohort" class="dict-select" style="flex:1;min-width:160px" onchange="renderAdminStudents()">
+              <option value="all">All Cohorts (전체 학기)</option>
+            </select>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Name</th>
+                  <th>Cohort / Semester</th>
+                  <th>Words Mastered</th>
+                  <th>Levels Done</th>
+                  <th>Exam Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adm-student-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 3: Cohort & Semester Management -->
+      <div id="apanel-cohorts" class="admin-panel" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+          <!-- Add Cohort Form -->
+          <div class="admin-card">
+            <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px">➕ Add New Semester Cohort</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div>
+                <label class="rlabel" for="new-cohort-name">Semester Title *</label>
+                <input id="new-cohort-name" class="rinput" placeholder="e.g. 2026 Fall Cohort">
+              </div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:1">
+                  <label class="rlabel" for="new-cohort-id">Cohort Code *</label>
+                  <input id="new-cohort-id" class="rinput" placeholder="e.g. 2026-2">
+                </div>
+                <div style="flex:1">
+                  <label class="rlabel" for="new-cohort-year">Academic Year</label>
+                  <input id="new-cohort-year" class="rinput" type="number" value="2026">
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+                <input type="checkbox" id="new-cohort-active" checked style="width:16px;height:16px;accent-color:var(--gold)">
+                <label for="new-cohort-active" style="font-size:12px;color:rgba(255,255,255,0.8);cursor:pointer">Set as Active Cohort for New Enrollments</label>
+              </div>
+              <button class="btn-rg" style="padding:12px;font-size:13px;margin-top:6px" onclick="addNewCohort()">Create Semester Cohort 🚀</button>
+            </div>
+          </div>
+
+          <!-- Existing Cohorts List -->
+          <div class="admin-card">
+            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">🎓 Registered Semesters</div>
+            <div id="adm-all-cohorts-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 4: Certificate Customizer & Audit -->
+      <div id="apanel-certs" class="admin-panel" style="display:none">
+        <!-- Certificate Template Customizer -->
+        <div class="cert-editor-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:var(--gold)">🎨 Customize Certificate Template</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">Supervising faculty can customize the certificate wording, signatory titles, and honors criteria.</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn-ro" style="padding:6px 14px;font-size:11px;border-radius:14px" onclick="previewCustomCert()">👁️ Live Preview</button>
+              <button class="btn-rg" style="padding:6px 16px;font-size:11px;border-radius:14px" onclick="saveCertConfig()">💾 Save Template</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:10px">
+            <div class="cert-editor-row">
+              <label for="cert-cfg-inst">Institution Name</label>
+              <input id="cert-cfg-inst" class="rinput" value="KyungDong University Global">
+            </div>
+            <div class="cert-editor-row">
+              <label for="cert-cfg-sub">Department / Program</label>
+              <input id="cert-cfg-sub" class="rinput" value="Korean Language Program · 쏙쏙 어휘왕 (Vocab-King)">
+            </div>
+            <div class="cert-editor-row">
+              <label for="cert-cfg-title">Certificate Header Title</label>
+              <input id="cert-cfg-title" class="rinput" value="Official Certificate of Academic Achievement">
+            </div>
+            <div class="cert-editor-row">
+              <label for="cert-cfg-sig-name">Faculty Signatory Name</label>
+              <input id="cert-cfg-sig-name" class="rinput" value="Prof. Hyejoon Yoon">
+            </div>
+            <div class="cert-editor-row">
+              <label for="cert-cfg-sig-title">Faculty Title &amp; Role</label>
+              <input id="cert-cfg-sig-title" class="rinput" value="Academic Supervisor &amp; Course Evaluator">
+            </div>
+            <div class="cert-editor-row">
+              <label for="cert-cfg-location">Location / Campus</label>
+              <input id="cert-cfg-location" class="rinput" value="Goseong Global Campus, KyungDong University">
+            </div>
+          </div>
+
+          <div class="cert-editor-row" style="margin-top:6px">
+            <label for="cert-cfg-body">Certification Body Paragraph</label>
+            <textarea id="cert-cfg-body">has successfully completed the intensive 쏙쏙 어휘왕 TOPIK I Vocabulary Curriculum, demonstrating certified mastery of 1,470 Korean vocabulary words across 5 program days, and fulfilling academic course evaluation criteria with a final examination score of:</textarea>
+          </div>
+
+          <div class="cert-editor-row" style="margin-top:6px">
+            <label for="cert-cfg-credits">Bottom Dual Attribution Note</label>
+            <input id="cert-cfg-credits" class="rinput" value="Project Initiated &amp; Developed by ALINGILYA CRISPIN NJEWA · Course Evaluation by Prof. Hyejoon Yoon">
+          </div>
+        </div>
+
+        <!-- Audit Table -->
+        <div class="admin-card" style="margin-top:14px">
+          <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:8px">📜 Certified Graduates Audit</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:14px">Official certificates signed by <strong>Prof. Hyejoon Yoon</strong> for students achieving &ge;80% (24/30).</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Student Name</th>
+                  <th>Cohort</th>
+                  <th>Exam Score</th>
+                  <th>Honors Level</th>
+                  <th>Official Signatory</th>
+                  <th>Certificate</th>
+                </tr>
+              </thead>
+              <tbody id="adm-cert-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 5: Contact Us Settings -->
+      <div id="apanel-contact" class="admin-panel" style="display:none">
+        <div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:var(--gold)">📬 Edit Contact &amp; Social Channels</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">Update official department contacts, office address, and social media handles shown to students.</div>
+            </div>
+            <button class="btn-rg" style="padding:7px 18px;font-size:12px;border-radius:18px" onclick="saveContactConfig()">💾 Save Changes</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+            <div>
+              <label class="rlabel" for="cfg-contact-email">Official Email *</label>
+              <input id="cfg-contact-email" class="rinput" placeholder="e.g. korean@kduniv.ac.kr">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-phone">Phone / Office Inquiries</label>
+              <input id="cfg-contact-phone" class="rinput" placeholder="e.g. +82-33-639-0114">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-office">Campus Office Location</label>
+              <input id="cfg-contact-office" class="rinput" placeholder="e.g. KDU Global Campus, Global Hall #304, Goseong-gun">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-website">University / Program Website</label>
+              <input id="cfg-contact-website" class="rinput" placeholder="e.g. https://global.kduniv.ac.kr">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-instagram">Instagram Handle / URL</label>
+              <input id="cfg-contact-instagram" class="rinput" placeholder="e.g. @kdu_global">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-youtube">YouTube Channel URL</label>
+              <input id="cfg-contact-youtube" class="rinput" placeholder="e.g. https://youtube.com/@KDUGlobal">
+            </div>
+            <div>
+              <label class="rlabel" for="cfg-contact-kakaotalk">KakaoTalk Open Chat / ID</label>
+              <input id="cfg-contact-kakaotalk" class="rinput" placeholder="e.g. KDU Korean Support">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 6: Admin Access Management (Super Admin) -->
+      <div id="apanel-admins" class="admin-panel" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+          <!-- Add Admin Form -->
+          <div class="admin-card">
+            <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px">➕ Create New Administrator</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:12px">As the Lead Developer &amp; Super Admin, you can add faculty administrators with their chosen username and password.</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <label class="rlabel" for="new-adm-name">Full Name *</label>
+                <input id="new-adm-name" class="rinput" placeholder="e.g. Prof. Hyejoon Yoon">
+              </div>
+              <div>
+                <label class="rlabel" for="new-adm-user">Username *</label>
+                <input id="new-adm-user" class="rinput" placeholder="e.g. prof_yoon">
+              </div>
+              <div>
+                <label class="rlabel" for="new-adm-pass">Password *</label>
+                <input id="new-adm-pass" class="rinput" type="password" placeholder="Choose a secure password">
+              </div>
+              <div>
+                <label class="rlabel" for="new-adm-role">Admin Role</label>
+                <select id="new-adm-role" class="rinput dict-select" style="width:100%;background:rgba(255,255,255,0.08);color:#fff">
+                  <option value="academic">Academic Admin (Prof. Yoon · Course Evaluator)</option>
+                  <option value="co-admin">Co-Administrator (Assistant / Faculty)</option>
+                  <option value="super">Super Admin (Full System Access)</option>
+                </select>
+              </div>
+              <button class="btn-rg" style="padding:12px;font-size:13px;margin-top:6px" onclick="addNewAdmin()">Create Admin Account 🚀</button>
+            </div>
+          </div>
+
+          <!-- Existing Admins List -->
+          <div class="admin-card">
+            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">🛡️ Active Administrators</div>
+            <div id="adm-all-admins-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ABOUT SCREEN (Dedicated Information Page) -->
+<div id="about" class="screen">
+<div class="about-inner">
+  <button class="about-back" onclick="show('home')">← Back to App</button>
+  <div class="about-logo-wrap">
+    <img src="vk_logo.jpg" class="about-logo" alt="Vocab-King Logo">
+    <div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px">Vocab-<span style="color:var(--gold)">King</span></div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:2px;text-transform:uppercase;margin-top:2px">Learn Korean. Learn Confidently.</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.7);line-height:1.7;max-width:440px;margin-top:8px">
+      <strong>쏙쏙 어휘왕 (Vocab-King)</strong> is a specialized interactive vocabulary-learning platform engineered for students taking the Korean Language Program at KyungDong University Global.
+    </div>
+  </div>
+
+  <div class="about-section">
+    <div class="about-section-title">👥 Project Leadership &amp; Faculty Supervision</div>
+    <div class="about-team-row">
+      <div class="about-avatar">👨‍💻</div>
+      <div class="about-team-info">
+        <div class="about-team-name">ALINGILYA CRISPIN NJEWA</div>
+        <div class="about-team-role">Project Initiator · Lead Software Architect &amp; Student Founder</div>
+        <span class="about-tag">Super Admin &amp; Developer</span>
+      </div>
+    </div>
+    <div class="about-team-row">
+      <div class="about-avatar">👩‍🏫</div>
+      <div class="about-team-info">
+        <div class="about-team-name">Prof. Hyejoon Yoon</div>
+        <div class="about-team-role">Academic Supervisor &amp; Course Evaluator · Korean Language Program</div>
+        <span class="about-tag">Certificate Signatory</span>
+      </div>
+    </div>
+    <div class="about-team-row">
+      <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🎓</div>
+      <div class="about-team-info">
+        <div class="about-team-name">KyungDong University Global</div>
+        <div class="about-team-role">Korean Language Program · Goseong Campus, South Korea</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="about-section">
+    <div class="about-section-title">📚 Academic Curriculum &amp; Methodology</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.72);line-height:1.8">
+      <p>The application covers <strong>1,470 essential TOPIK I vocabulary words</strong> systematically partitioned across 5 Program Days and 49 Book Units.</p>
+      <p style="margin-top:8px">Features include <strong>Study First Mode</strong> before quiz entry, <strong>Web Speech Native Korean Audio (ko-KR)</strong>, <strong>Part-of-Speech Matched Distractors</strong>, a responsive <strong>Searchable Dictionary</strong>, and an official <strong>Final Examination</strong> certifying graduates.</p>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;width:100%">
+    <button class="btn-rg" style="flex:1;padding:14px;border-radius:50px" onclick="show('contact');renderContactPage()">📬 Contact Us</button>
+    <button class="btn-ro" style="flex:1;padding:14px;border-radius:50px" onclick="show('home')">🏠 Return to App</button>
+  </div>
+</div>
+</div>
+
+<!-- CONTACT SCREEN -->
+<div id="contact" class="screen">
+<div class="contact-inner">
+  <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:8px">
+    <div>
+      <div style="font-size:22px;font-weight:900">📬 Contact Us</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5)">KDU Korean Language Program · Vocab-King Support</div>
+    </div>
+    <button class="about-back" onclick="show('home')">← Home</button>
+  </div>
+
+  <div class="contact-card" id="contact-info-card">
+    <!-- Populated dynamically via renderContactPage() in app.js -->
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:10px">
+    <button class="btn-ro" style="flex:1;padding:12px;border-radius:30px" onclick="show('about')">ℹ️ About the App</button>
+    <button class="btn-rg" style="flex:1;padding:12px;border-radius:30px" onclick="show('home')">🏠 Back to Learning</button>
+  </div>
 </div>
 </div>
 
