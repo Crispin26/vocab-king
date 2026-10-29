@@ -3,7 +3,7 @@
 // Network-first for app shell, cache fallback for offline
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME = 'vocab-king-v5-networkfirst-20261027';
+const CACHE_NAME = 'vocab-king-v6-auth-20261029';
 const STATIC_ASSETS = [
   './',
   './index.html',

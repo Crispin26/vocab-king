@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0F0A2B">
 <title>쏙쏙 어휘왕 · Vocab King v3</title>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261027_crown">
+<link rel="stylesheet" href="styles.css?v=20261029_auth">
 </head>
 <body>
 
@@ -62,7 +62,7 @@
       </div>
     </div>
 
-    <div class="vk-audio-tester" onclick="speakWord('안녕하세요')">
+    <div class="vk-audio-tester" onclick="speakKR('안녕하세요')">
       <span class="audio-icon">🔊</span> Tap to test audio: 안녕하세요 (Hello)
     </div>
 
@@ -76,50 +76,86 @@
   </div>
 </div>
 
-<!-- REGISTER -->
+<!-- REGISTER / LOGIN / PASSWORD RESET -->
 <div id="register" class="screen">
 <div class="ri">
   <div style="font-size:44px;margin-bottom:14px">🎓</div>
   <div class="kdu-pill">KDU Korean Program</div>
-  <div class="ititle" style="margin:12px 0 4px">어휘왕 <span class="g">등록</span></div>
-  <div class="isub">REGISTER OR LOGIN</div>
+  <div class="ititle" style="margin:12px 0 4px">어휘왕 <span class="g">로그인</span></div>
+  <div class="isub">SIGN IN OR CREATE AN ACCOUNT</div>
 
   <!-- TABS -->
-  <div style="display:flex;gap:0;width:100%;max-width:420px;margin-top:16px;background:rgba(255,255,255,0.06);border-radius:14px;padding:4px">
-    <button id="tab-new" onclick="switchTab('new')" style="flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:var(--gold);color:var(--navy);transition:all 0.2s">New Student</button>
-    <button id="tab-login" onclick="switchTab('login')" style="flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:rgba(255,255,255,0.5);transition:all 0.2s">Already Registered</button>
+  <div id="auth-tabs" style="display:flex;gap:0;width:100%;max-width:420px;margin-top:16px;background:rgba(255,255,255,0.06);border-radius:14px;padding:4px">
+    <button id="tab-login" class="auth-tab active" onclick="switchTab('login')">Sign In</button>
+    <button id="tab-new" class="auth-tab" onclick="switchTab('new')">New Student</button>
   </div>
 
-  <!-- NEW STUDENT PANEL -->
-  <div id="panel-new" class="rcard">
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center">First time? Create your profile below</div>
-    <div><label class="rlabel" for="reg-name">Full Name *</label>
-      <input id="reg-name" class="rinput" type="text" placeholder="e.g. ALINGILYA CRISPIN NJEWA" autocomplete="name"></div>
+  <!-- SIGN IN -->
+  <form id="panel-login" class="rcard" onsubmit="event.preventDefault();doLogin()">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);text-align:center">Sign in with your Student ID <strong>or</strong> email</div>
+    <div><label class="rlabel" for="login-id">Student ID or Email *</label>
+      <input id="login-id" class="rinput" type="text" placeholder="e.g. 2024001 or you@example.com" autocomplete="username" required></div>
+    <div><label class="rlabel" for="login-pass">Password *</label>
+      <input id="login-pass" class="rinput" type="password" placeholder="Your password" autocomplete="current-password" required></div>
+    <div id="login-err" class="rerr" role="alert"></div>
+    <div id="login-msg" class="rmsg" role="status"></div>
+    <button type="submit" class="btn-reg" id="login-btn">Sign In 🔓</button>
+    <button type="button" class="auth-link" id="resend-btn" style="display:none" onclick="resendVerification()">📧 Resend verification email</button>
+    <button type="button" class="auth-link" onclick="switchTab('forgot')">Forgot your password?</button>
+  </form>
+
+  <!-- NEW STUDENT -->
+  <form id="panel-new" class="rcard" style="display:none" onsubmit="event.preventDefault();doRegister()">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);text-align:center">First time? Create your account below</div>
+    <div><label class="rlabel" for="reg-name">Full Name (shown on your certificate) *</label>
+      <input id="reg-name" class="rinput" type="text" placeholder="e.g. ALINGILYA CRISPIN NJEWA" autocomplete="name" required></div>
     <div><label class="rlabel" for="reg-id">Student ID *</label>
-      <input id="reg-id" class="rinput" type="text" placeholder="e.g. KDU2024001" autocomplete="off"></div>
+      <input id="reg-id" class="rinput" type="text" placeholder="e.g. 2024001" autocomplete="off" required></div>
+    <div><label class="rlabel" for="reg-email">Email *</label>
+      <input id="reg-email" class="rinput" type="email" placeholder="you@example.com" autocomplete="email" required></div>
+    <div><label class="rlabel" for="reg-nick">Nickname (shown on the leaderboard) *</label>
+      <input id="reg-nick" class="rinput" style="font-family:'Noto Sans KR',sans-serif" type="text" placeholder="e.g. 크리스핀" maxlength="24" required></div>
     <div><label class="rlabel" for="reg-cohort">Semester Cohort (학기 구분) *</label>
       <select id="reg-cohort" class="rinput dict-select" style="width:100%;background:rgba(255,255,255,0.08);color:#fff"></select></div>
-    <div><label class="rlabel" for="reg-nick">Korean Nickname (선택사항)</label>
-      <input id="reg-nick" class="rinput" style="font-family:'Noto Sans KR',sans-serif" type="text" placeholder="e.g. 크리스핀 (optional)"></div>
-    <div id="reg-err" class="rerr"></div>
-    <button class="btn-reg" onclick="doRegister()">Register &amp; Start 🚀</button>
+    <div><label class="rlabel" for="reg-pass">Password (min. 8 characters) *</label>
+      <input id="reg-pass" class="rinput" type="password" placeholder="Choose a password" autocomplete="new-password" minlength="8" required></div>
+    <div><label class="rlabel" for="reg-pass2">Confirm Password *</label>
+      <input id="reg-pass2" class="rinput" type="password" placeholder="Type it again" autocomplete="new-password" minlength="8" required></div>
+    <div id="reg-err" class="rerr" role="alert"></div>
+    <button type="submit" class="btn-reg" id="reg-btn">Create Account 🚀</button>
+  </form>
+
+  <!-- CHECK YOUR EMAIL -->
+  <div id="panel-check" class="rcard" style="display:none;text-align:center">
+    <div style="font-size:40px">📬</div>
+    <div style="font-size:16px;font-weight:800;color:#fff">Check your email</div>
+    <div id="check-msg" style="font-size:13px;color:rgba(255,255,255,0.7);line-height:1.6"></div>
+    <button type="button" class="btn-reg" onclick="switchTab('login')">Go to Sign In →</button>
   </div>
 
-  <!-- RETURNING STUDENT PANEL -->
-  <div id="panel-login" class="rcard" style="display:none">
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center">Used this app on another device?<br>Enter your Student ID to restore your profile</div>
-    <div><label class="rlabel" for="login-sid">Student ID *</label>
-      <input id="login-sid" class="rinput" type="text" placeholder="e.g. KDU2024001" autocomplete="off"></div>
-    <div id="login-err" class="rerr"></div>
-    <div id="login-found" style="display:none;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.4);border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:20px;margin-bottom:6px">👋</div>
-      <div id="login-found-name" style="font-size:15px;font-weight:700;color:#fff"></div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">Found your profile!</div>
-    </div>
-    <button class="btn-reg" onclick="doLogin()" id="login-btn">Find My Profile 🔍</button>
-  </div>
+  <!-- FORGOT PASSWORD -->
+  <form id="panel-forgot" class="rcard" style="display:none" onsubmit="event.preventDefault();sendPasswordReset()">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);text-align:center">Enter your email and we'll send you a link to reset your password</div>
+    <div><label class="rlabel" for="forgot-email">Email *</label>
+      <input id="forgot-email" class="rinput" type="email" placeholder="you@example.com" autocomplete="email" required></div>
+    <div id="forgot-err" class="rerr" role="alert"></div>
+    <div id="forgot-msg" class="rmsg" role="status"></div>
+    <button type="submit" class="btn-reg" id="forgot-btn">Send Reset Link 📧</button>
+    <button type="button" class="auth-link" onclick="switchTab('login')">← Back to Sign In</button>
+  </form>
 
-  <div class="rskip">Want to skip? <span onclick="skipReg()">Continue without registering</span></div>
+  <!-- SET NEW PASSWORD (opened from the reset email link) -->
+  <form id="panel-newpass" class="rcard" style="display:none" onsubmit="event.preventDefault();saveNewPassword()">
+    <div style="font-size:14px;font-weight:800;color:#fff;text-align:center">🔑 Choose a new password</div>
+    <div><label class="rlabel" for="newpass-1">New Password (min. 8 characters) *</label>
+      <input id="newpass-1" class="rinput" type="password" autocomplete="new-password" minlength="8" required></div>
+    <div><label class="rlabel" for="newpass-2">Confirm New Password *</label>
+      <input id="newpass-2" class="rinput" type="password" autocomplete="new-password" minlength="8" required></div>
+    <div id="newpass-err" class="rerr" role="alert"></div>
+    <button type="submit" class="btn-reg" id="newpass-btn">Save New Password ✓</button>
+  </form>
+
+  <div class="rskip" id="rskip">Just looking? <span onclick="skipReg()">Try without an account</span> (progress won't be saved)</div>
 </div>
 </div>
 
@@ -138,6 +174,7 @@
       <button class="hbtn" onclick="show('about')" title="About the App &amp; Initiators" aria-label="About the App">ℹ️</button>
       <button class="hbtn" onclick="show('contact');renderContactPage()" title="Contact Us" aria-label="Contact Us">📬</button>
       <button class="hbtn" onclick="openAdminLogin()" title="Admin &amp; Faculty Access" aria-label="Admin Access">🔐</button>
+      <button class="hbtn" id="logout-btn" onclick="doLogout()" title="Sign out" aria-label="Sign out">🚪</button>
     </div>
   </div>
   <div id="welcome-strip"></div>
@@ -152,6 +189,7 @@
   <div class="days-list" id="days-list"></div>
   <button class="btn-outline" id="fail-btn" style="display:none">⚡ Review All Failed Words (<span id="fcnt">0</span>)</button>
   <button class="btn-outline" id="dict-home-btn" onclick="openDictionary()">🔍 &nbsp;Searchable Dictionary · 단어 사전 (1,470 Words)</button>
+  <button class="btn-outline" id="my-cert-btn" onclick="openMyCertificate()" style="display:none;margin-top:6px;border-color:rgba(34,197,94,0.45);color:var(--green)">📜 View My Certificate</button>
   <button class="btn-outline" onclick="show('exam-intro')" style="margin-top:6px;border-color:rgba(245,197,24,0.4);color:var(--gold)">📝 &nbsp;Take Final Exam · 시험 보기</button>
   <div style="display:flex;gap:8px;margin-top:20px;width:100%;justify-content:center;flex-wrap:wrap">
     <button class="btn-ro" style="flex:1;min-width:100px;font-size:12px;padding:10px;border-radius:24px" onclick="show('intro')">✨ Welcome</button>
@@ -311,7 +349,7 @@
   </div>
   <div class="exam-rules">
     <div class="exam-rule"><div class="exam-rule-icon">🎯</div><div>30 questions randomly selected from all 1,470 words across all 5 program days</div></div>
-    <div class="exam-rule"><div class="exam-rule-icon">📝</div><div>5 TOPIK-style question types: fill in the blank, choose the meaning, synonyms, antonyms, and word in context</div></div>
+    <div class="exam-rule"><div class="exam-rule-icon">📝</div><div>5 TOPIK-style question types: Korean → meaning, meaning → Korean, fill in the blank, synonyms, and word from description</div></div>
     <div class="exam-rule"><div class="exam-rule-icon">✅</div><div>Score <strong>80% or above (24/30)</strong> to earn your certificate</div></div>
     <div class="exam-rule"><div class="exam-rule-icon">🏆</div><div>Score <strong>95% or above (29/30)</strong> to earn the Advanced Level 2 certificate</div></div>
     <div class="exam-rule"><div class="exam-rule-icon">📜</div><div>Certificate signed by <strong>Prof. Hyejoon Yoon</strong> · Korean Language Program</div></div>
@@ -368,12 +406,12 @@
       <div class="ititle" style="font-size:24px;margin:10px 0 4px">Vocab-King <span class="g">Admin</span></div>
       <div class="isub" style="font-size:11px;margin-bottom:14px">Management &amp; Course Evaluation</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:14px;text-align:left;line-height:1.6;background:rgba(255,255,255,0.04);padding:10px;border-radius:10px">
-        Sign in with your administrator credentials to manage semester cohorts, customize certificates, evaluate curriculum analytics, and configure contact channels.
+        Sign in with your administrator email and password to manage semester cohorts, customize certificates, evaluate curriculum analytics, and configure contact channels.
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;text-align:left">
         <div>
-          <label class="rlabel" for="admin-user-input">Admin Username</label>
-          <input id="admin-user-input" class="rinput" type="text" placeholder="Username" autocomplete="username">
+          <label class="rlabel" for="admin-user-input">Admin Email</label>
+          <input id="admin-user-input" class="rinput" type="email" placeholder="admin@example.com" autocomplete="username">
         </div>
         <div>
           <label class="rlabel" for="admin-pass-input">Password</label>
@@ -650,21 +688,18 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
           <!-- Add Admin Form -->
           <div class="admin-card">
-            <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px">➕ Create New Administrator</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:12px">As the Lead Developer &amp; Super Admin, you can add faculty administrators with their chosen username and password.</div>
+            <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px">➕ Grant Administrator Access</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:12px">The person must already have an account: either they registered in the app, or you added them in Supabase → Authentication → Users. Enter their email to give them admin access.</div>
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>
                 <label class="rlabel" for="new-adm-name">Full Name *</label>
                 <input id="new-adm-name" class="rinput" placeholder="e.g. Prof. Hyejoon Yoon">
               </div>
               <div>
-                <label class="rlabel" for="new-adm-user">Username *</label>
-                <input id="new-adm-user" class="rinput" placeholder="e.g. prof_yoon">
+                <label class="rlabel" for="new-adm-user">Account Email *</label>
+                <input id="new-adm-user" class="rinput" type="email" placeholder="e.g. professor@kduniv.ac.kr">
               </div>
-              <div>
-                <label class="rlabel" for="new-adm-pass">Password *</label>
-                <input id="new-adm-pass" class="rinput" type="password" placeholder="Choose a secure password">
-              </div>
+              
               <div>
                 <label class="rlabel" for="new-adm-role">Admin Role</label>
                 <select id="new-adm-role" class="rinput dict-select" style="width:100%;background:rgba(255,255,255,0.08);color:#fff">
@@ -673,7 +708,7 @@
                   <option value="super">Super Admin (Full System Access)</option>
                 </select>
               </div>
-              <button class="btn-rg" style="padding:12px;font-size:13px;margin-top:6px" onclick="addNewAdmin()">Create Admin Account 🚀</button>
+              <button class="btn-rg" style="padding:12px;font-size:13px;margin-top:6px" onclick="addNewAdmin()">Grant Admin Access 🛡️</button>
             </div>
           </div>
 
@@ -681,6 +716,17 @@
           <div class="admin-card">
             <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">🛡️ Active Administrators</div>
             <div id="adm-all-admins-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+
+          <!-- Change My Password -->
+          <div class="admin-card" style="grid-column:1/-1">
+            <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:6px">🔑 Change My Password</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:12px">Update the password for your currently logged-in administrator account. Changes take effect immediately.</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:520px;align-items:center">
+              <input id="change-adm-newpass" class="rinput" type="password" placeholder="Enter new password (min. 8 characters)" autocomplete="new-password" style="flex:1;min-width:200px">
+              <button class="btn-ro" style="padding:10px 18px;border-color:var(--gold);color:var(--gold);white-space:nowrap" onclick="changeCurrentAdminPassword()">Update Password 🔒</button>
+            </div>
+            <div id="change-pass-msg" style="font-size:12px;margin-top:8px;display:none;font-weight:600"></div>
           </div>
         </div>
       </div>
@@ -766,7 +812,8 @@
 </div>
 </div>
 
-<script src="vocab-data.js?v=20261027_crown"></script>
-<script src="app.js?v=20261027_crown"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="vocab-data.js?v=20261029_auth"></script>
+<script src="app.js?v=20261029_auth"></script>
 </body>
 </html>

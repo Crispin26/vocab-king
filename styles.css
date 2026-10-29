@@ -479,6 +479,56 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   transition: all 0.2s;
 }
 .btn-reg:hover { filter: brightness(1.08); }
+.btn-reg:disabled { opacity: 0.6; cursor: wait; }
+.rmsg {
+  display: none;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--green);
+  text-align: center;
+}
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s;
+}
+.auth-tab.active { background: var(--gold); color: var(--navy); }
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px;
+}
+.vk-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  background: #22c55e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 22px;
+  border-radius: 30px;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+.vk-toast.error { background: #dc2626; }
 .rskip {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);

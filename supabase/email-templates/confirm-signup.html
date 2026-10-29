@@ -1,0 +1,36 @@
+<!--
+  Supabase → Authentication → Emails → "Confirm signup"
+  Subject: 👑 Welcome to Vocab-King! Please verify your email
+  Paste everything below into the message body.
+-->
+<div style="font-family:Arial,Helvetica,sans-serif;background:#0D1B2A;padding:28px 12px">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden">
+    <div style="background:#0F0A2B;padding:24px;text-align:center">
+      <div style="font-size:30px">👑</div>
+      <div style="font-size:22px;font-weight:800;color:#F5C518;letter-spacing:1px">VOCAB-KING</div>
+      <div style="font-size:13px;color:#ffffff;opacity:0.75">쏙쏙 어휘왕 · TOPIK I Vocabulary</div>
+    </div>
+    <div style="padding:24px;color:#1A1A2E;font-size:14px;line-height:1.6">
+      <p style="margin:0 0 12px">안녕하세요, <strong>{{ .Data.nickname }}</strong>! 👋</p>
+      <p style="margin:0 0 12px">Welcome to <strong>Vocab-King</strong>, the KDU Korean Program's TOPIK I vocabulary app.
+        Your account for Student ID <strong>{{ .Data.student_id }}</strong> has been created.</p>
+      <p style="margin:0 0 18px">Please verify your email address to activate your profile:</p>
+      <p style="text-align:center;margin:0 0 20px">
+        <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#F5C518;color:#0D1B2A;font-weight:800;text-decoration:none;padding:12px 26px;border-radius:24px">Verify My Email ✓</a>
+      </p>
+      <p style="margin:0 0 8px;font-weight:700">What you can do in Vocab-King:</p>
+      <ul style="margin:0 0 16px;padding-left:18px">
+        <li>📖 Study all 1,470 TOPIK I words across 5 program days</li>
+        <li>🔊 Listen to native Korean pronunciation</li>
+        <li>✍️ Take quizzes and review the words you missed</li>
+        <li>🏆 Compete on your cohort leaderboard</li>
+        <li>📜 Pass the final exam to earn your certificate</li>
+      </ul>
+      <p style="margin:0 0 6px">You can sign in with your <strong>Student ID</strong> or your <strong>email</strong> and password.</p>
+      <p style="margin:0;color:#6B7280;font-size:12px">If you didn't create this account, you can ignore this email.</p>
+    </div>
+    <div style="background:#F8F9FA;padding:14px;text-align:center;font-size:11px;color:#94A3B8">
+      KyungDong University Global · Korean Language Program · Vocab-King
+    </div>
+  </div>
+</div>

@@ -1,0 +1,21 @@
+# Netlify: plain static site, no build step. The repository root is the site.
+[build]
+  publish = "."
+  command = ""
+
+# Always check for a fresh service worker and manifest so updates reach students quickly
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

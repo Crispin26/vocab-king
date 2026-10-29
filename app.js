@@ -5,44 +5,110 @@
 // ═══════════════════════════════════════════════════
 
 // ── STATE ──
+// All learning data lives in Supabase. This object is only the in-memory copy
+// loaded after sign-in (guests keep it in memory only, nothing is saved).
+let currentAdmin = null;   // admins row of the signed-in user, if any
+function emptyUser(){ return {name:'',sid:'',nick:'',cohort:'',email:''}; }
 let g = {
   progDay:1, bookDay:1, words:[],
   queue:[], fails:[], sfails:[],
-  ok:0, bad:0, idx:0, streak:0, best:0, answered:false,
+  ok:0, bad:0, idx:0, streak:0, best:0, runBest:0, answered:false,
   done:{}, dfails:{},
-  user:{name:'',sid:'',nick:'',cohort:'2026-1'},
+  user:emptyUser(),
+  exam:null,      // best final exam result: {best, passed, advanced, date}
+  guest:false,
   mode:'level', // 'level', 'study', 'fr', 'exam'
   studyIdx:0
 };
-const KEY='topik_vk3';
 
-// ── COHORT SYSTEM (Per-Semester Differentiation) ──
-const DEFAULT_COHORTS = [
-  { id: '2026-1', name: '2026 Spring Cohort (Current)', semester: 'Spring', year: 2026, active: true },
-  { id: '2025-2', name: '2025 Fall Cohort', semester: 'Fall', year: 2025, active: false },
-  { id: '2025-1', name: '2025 Spring Cohort', semester: 'Spring', year: 2025, active: false },
-  { id: '2024-2', name: '2024 Fall Cohort', semester: 'Fall', year: 2024, active: false },
-  { id: 'alumni', name: 'Alumni / Former Students', semester: 'Former', year: 2024, active: false }
-];
-
-function getCohorts(){
-  try {
-    const raw = localStorage.getItem('topik_cohorts');
-    if(raw){
-      const parsed = JSON.parse(raw);
-      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch(e){}
-  return DEFAULT_COHORTS;
+function resetProgressState(){
+  g.fails=[]; g.done={}; g.dfails={}; g.best=0; g.exam=null;
 }
 
-function saveCohorts(list){
-  try { localStorage.setItem('topik_cohorts', JSON.stringify(list)); } catch(e){}
+// ═══════════════════════════════════════════════════
+// SUPABASE CLIENT
+// The anon key is public by design; Row Level Security (supabase/setup.sql)
+// decides what each signed-in user may read or write.
+// supabase-js keeps the sign-in session token in browser storage; no app data is stored there.
+// ═══════════════════════════════════════════════════
+const SB_URL = "https://rrcinkfoszcpoblgnkeb.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyY2lua2Zvc3pjcG9ibGdua2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0Nzk3MjIsImV4cCI6MjA5ODA1NTcyMn0.4N0kdFCraOXCO3fpf_5XF7lN65X9pIXqAODFqyd5rqI";
+
+// Read the auth redirect type (signup / recovery) before supabase-js clears the URL hash
+const AUTH_REDIRECT = (()=>{
+  const p = new URLSearchParams((location.hash||'').replace(/^#/,''));
+  return { type: p.get('type'), error: p.get('error_description') };
+})();
+
+const sb = window.supabase.createClient(SB_URL, SB_KEY, {
+  auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+});
+
+let passwordRecovery = AUTH_REDIRECT.type === 'recovery';
+sb.auth.onAuthStateChange(event=>{
+  if(event === 'PASSWORD_RECOVERY'){
+    passwordRecovery = true;
+    show('register'); switchTab('newpass');
+  }
+});
+
+function appUrl(){ return location.origin + location.pathname; }
+
+function toast(msg, type='ok'){
+  const el = document.createElement('div');
+  el.className = 'vk-toast' + (type === 'error' ? ' error' : '');
+  el.setAttribute('role', 'status');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
 }
 
+function reportDbError(error, what){
+  console.warn('DB error' + (what ? ' (' + what + ')' : '') + ':', error && error.message);
+  toast(`⚠️ Couldn't save ${what || 'your progress'}. Check your connection.`, 'error');
+}
+
+// Fetch every row of a table, 1000 at a time (Supabase returns at most 1000 rows per request)
+async function fetchAll(table, columns='*'){
+  const rows = [];
+  for(let from=0; ; from+=1000){
+    const { data, error } = await sb.from(table).select(columns).range(from, from+999);
+    if(error){ console.warn('DB error:', error.message); return rows; }
+    rows.push(...data);
+    if(data.length < 1000) return rows;
+  }
+}
+
+// ── COHORTS & SETTINGS (loaded from the database at start-up) ──
+let cohortsCache = [];
+let certConfigCache = {};
+let contactConfigCache = {};
+
+function getCohorts(){ return cohortsCache; }
 function getActiveCohort(){
-  const list = getCohorts();
-  return list.find(c => c.active) || list[0];
+  return cohortsCache.find(c => c.active) || cohortsCache[0] || { id:'', name:'', semester:'', year:'', active:false };
+}
+
+async function loadCohorts(){
+  const { data, error } = await sb.from('cohorts').select('*').order('year', {ascending:false}).order('id', {ascending:false});
+  if(error){ console.warn('DB error (cohorts):', error.message); return; }
+  cohortsCache = data || [];
+}
+
+async function loadSettings(){
+  const { data, error } = await sb.from('app_settings').select('key,value');
+  if(error){ console.warn('DB error (settings):', error.message); return; }
+  (data || []).forEach(r=>{
+    if(r.key === 'cert_config') certConfigCache = r.value || {};
+    if(r.key === 'contact_config') contactConfigCache = r.value || {};
+  });
+}
+
+async function saveSetting(key, value){
+  const { data:{ user } } = await sb.auth.getUser();
+  const { error } = await sb.from('app_settings')
+    .upsert({ key, value, updated_at:new Date().toISOString(), updated_by:user ? user.id : null });
+  if(error) throw error;
 }
 
 function populateCohortSelects(){
@@ -50,79 +116,327 @@ function populateCohortSelects(){
   const regSel = document.getElementById('reg-cohort');
   if(regSel){
     const prev = regSel.value;
-    regSel.innerHTML = cohorts.map(c => `
-      <option value="${c.id}" ${(prev ? prev === c.id : c.active) ? 'selected' : ''}>
-        ${c.name} ${c.active ? '★ (Current)' : ''}
-      </option>`).join('');
+    regSel.innerHTML = cohorts.length ? cohorts.map(c => `
+      <option value="${esc(c.id)}" ${(prev ? prev === c.id : c.active) ? 'selected' : ''}>
+        ${esc(c.name)} ${c.active ? '★ (Current)' : ''}
+      </option>`).join('')
+      : '<option value="">Current semester</option>';
   }
   const lbSel = document.getElementById('lb-cohort-filter');
   if(lbSel){
     const prev = lbSel.value || 'all';
     lbSel.innerHTML = '<option value="all">All Semesters (전체 학기)</option>' +
-      cohorts.map(c => `<option value="${c.id}" ${prev === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+      cohorts.map(c => `<option value="${esc(c.id)}" ${prev === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   }
   const admSel = document.getElementById('adm-student-cohort');
   if(admSel){
     const prev = admSel.value || 'all';
     admSel.innerHTML = '<option value="all">All Cohorts (전체 학기)</option>' +
-      cohorts.map(c => `<option value="${c.id}" ${prev === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+      cohorts.map(c => `<option value="${esc(c.id)}" ${prev === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   }
 }
 
-// Student record caching for offline and admin roster view
-function getCachedStudents(){
-  try {
-    const raw = localStorage.getItem('topik_students_cache');
-    if(raw) return JSON.parse(raw);
-  } catch(e){}
-  return [];
-}
+function getExamRecord(){ return g.exam; }
 
-function saveCachedStudents(list){
-  try { localStorage.setItem('topik_students_cache', JSON.stringify(list)); } catch(e){}
-}
+// ── LOAD THE SIGNED-IN USER'S PROFILE & PROGRESS ──
+async function loadMyData(){
+  const { data:{ user } } = await sb.auth.getUser();
+  if(!user) return false;
+  g.guest = false;
+  resetProgressState();
 
-function cacheStudentRecord(student){
-  if(!student || !student.sid) return;
-  const list = getCachedStudents();
-  const idx = list.findIndex(s => s.sid === student.sid);
-  const doneCount = Object.values(g.done||{}).filter(Boolean).length;
-  const record = {
-    sid: student.sid,
-    name: student.name || 'Student',
-    nick: student.nick || '',
-    cohort: student.cohort || getActiveCohort().id,
-    words: student.words || (g.user && g.user.sid === student.sid ? doneCount * 30 : 0),
-    levels: student.levels || (g.user && g.user.sid === student.sid ? doneCount : 0),
-    examPassed: student.examPassed || (g.user && g.user.sid === student.sid ? (localStorage.getItem('topik_exam_passed')==='1') : false),
-    examScore: student.examScore || parseInt(localStorage.getItem('topik_exam_best')||'0', 10),
-    lastSeen: new Date().toISOString()
-  };
-  if(idx >= 0){ list[idx] = { ...list[idx], ...record }; }
-  else { list.push(record); }
-  saveCachedStudents(list);
-}
+  const [stuRes, admRes] = await Promise.all([
+    sb.from('students').select('*').eq('user_id', user.id).maybeSingle(),
+    sb.from('admins').select('*').eq('user_id', user.id).maybeSingle()
+  ]);
+  currentAdmin = admRes.data || null;
+  const stu = stuRes.data;
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify({fails:g.fails,best:g.best,done:g.done,dfails:g.dfails,user:g.user}))}catch(e){}}
-function load(){
-  try{
-    const d=localStorage.getItem(KEY);
-    if(d){
-      const s=JSON.parse(d);
-      g.fails=s.fails||[];
-      g.best=s.best||0;
-      g.done=s.done||{};
-      g.dfails=s.dfails||{};
-      g.user=s.user||{name:'',sid:'',nick:'',cohort:'2026-1'};
-      if(!g.user.cohort) g.user.cohort = getActiveCohort().id;
+  if(!stu){
+    // Admin accounts have no student profile
+    g.user = { ...emptyUser(), name: currentAdmin ? currentAdmin.name : '', nick: currentAdmin ? currentAdmin.name.split(' ')[0] : '', email:user.email };
+    return true;
+  }
+
+  g.user = { name:stu.name, sid:stu.student_id, nick:stu.nickname || '', cohort:stu.cohort || getActiveCohort().id, email:user.email };
+  const [progRes, failRes] = await Promise.all([
+    sb.from('progress').select('*').eq('student_id', stu.student_id),
+    sb.from('fail_words').select('word_kr,word_en,word_type').eq('student_id', stu.student_id)
+  ]);
+  (progRes.data || []).forEach(p=>{
+    if(p.level_key === 'final_exam'){
+      g.exam = { best:p.score_pct || 0, passed:!!p.completed, advanced:(p.score_pct || 0) >= ADV_PCT, date:p.updated_at };
+      return;
     }
-  }catch(e){}
+    g.done[p.level_key] = p.completed;
+    g.dfails[p.level_key] = p.wrong || 0;
+    g.best = Math.max(g.best, p.best_streak || 0);
+  });
+  g.fails = (failRes.data || []).map(f=>({ w:f.word_kr, e:f.word_en, t:f.word_type || '명사' }));
+  sb.rpc('touch_last_seen').then(({error})=>{ if(error) console.warn('DB error (last seen):', error.message); });
+  return true;
 }
+
+// ── SAVING RESULTS (database functions check the signed-in student on the server) ──
+async function dbSaveProgress(sid, progDay, bookDay, correct, wrong, pct, streak){
+  if(!sid) return;
+  const { error } = await sb.rpc('record_level_result', {
+    p_prog_day:progDay, p_book_day:bookDay, p_correct:correct, p_wrong:wrong, p_best_streak:Math.min(streak, 30)
+  });
+  if(error) reportDbError(error, 'your level result');
+}
+
+async function dbSaveFailWords(sid, fails, progDay, bookDay){
+  if(!sid || !fails.length) return;
+  const { error } = await sb.rpc('add_fail_words', {
+    p_words: fails.map(f=>({ w:f.w, e:f.e, t:f.t || '' })), p_prog_day:progDay, p_book_day:bookDay
+  });
+  if(error) reportDbError(error, 'your review words');
+}
+
+async function dbClearMasteredWords(sid, words){
+  if(!sid || !words.length) return;
+  const { error } = await sb.rpc('clear_fail_words', { p_words: words.map(w=>w.w) });
+  if(error) reportDbError(error, 'your review words');
+}
+
+// ═══════════════════════════════════════════════════
+// ACCOUNTS: REGISTER · SIGN IN · VERIFY EMAIL · RESET PASSWORD
+// ═══════════════════════════════════════════════════
+let pendingVerifyEmail = '';
+
+function setMsg(id, text){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+function setBusy(btnId, busy, busyText){
+  const btn = document.getElementById(btnId);
+  if(!btn) return;
+  if(busy){ btn.dataset.label = btn.textContent; btn.textContent = busyText; btn.disabled = true; }
+  else { if(btn.dataset.label) btn.textContent = btn.dataset.label; btn.disabled = false; }
+}
+
+function switchTab(tab){
+  ['login','new','check','forgot','newpass'].forEach(t=>{
+    const panel = document.getElementById('panel-' + t);
+    if(panel) panel.style.display = (t === tab) ? 'flex' : 'none';
+  });
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-new').classList.toggle('active', tab === 'new');
+  document.getElementById('auth-tabs').style.display = (tab === 'newpass') ? 'none' : 'flex';
+  document.getElementById('rskip').style.display = (tab === 'newpass') ? 'none' : 'block';
+  ['reg-err','login-err','login-msg','forgot-err','forgot-msg','newpass-err'].forEach(id=>setMsg(id, ''));
+  if(tab === 'new') populateCohortSelects();
+}
+
+// PGRST202 = database function missing, i.e. supabase/setup.sql has not been run yet
+function serverErrorText(e){
+  return (e && e.code === 'PGRST202')
+    ? 'The database is not set up yet. An administrator needs to run supabase/setup.sql.'
+    : 'Could not reach the server. Check your connection and try again.';
+}
+
+async function doRegister(){
+  const val = id => (document.getElementById(id).value || '').trim();
+  const name = val('reg-name').toUpperCase();
+  const sid = val('reg-id').toUpperCase();
+  const email = val('reg-email').toLowerCase();
+  const nick = val('reg-nick');
+  const cohort = document.getElementById('reg-cohort').value || getActiveCohort().id;
+  const pass = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+
+  if(!name) return setMsg('reg-err', 'Please enter your full name.');
+  if(!/^[A-Z0-9-]{3,20}$/.test(sid)) return setMsg('reg-err', 'Student ID must be 3–20 letters or numbers.');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setMsg('reg-err', 'Please enter a valid email address.');
+  if(!nick) return setMsg('reg-err', 'Please choose a nickname for the leaderboard.');
+  if(pass.length < 8) return setMsg('reg-err', 'Password must be at least 8 characters.');
+  if(pass !== pass2) return setMsg('reg-err', 'The two passwords do not match.');
+  setMsg('reg-err', '');
+  setBusy('reg-btn', true, 'Creating account... ⏳');
+
+  try{
+    const { data:available, error:availErr } = await sb.rpc('is_student_id_available', { p_student_id:sid });
+    if(availErr) throw availErr;
+    if(available === false){
+      return setMsg('reg-err', 'This Student ID is already registered. Sign in, or use "Forgot your password?".');
+    }
+
+    const { data, error } = await sb.auth.signUp({
+      email, password:pass,
+      options:{ emailRedirectTo:appUrl(), data:{ student_id:sid, name, nickname:nick, cohort } }
+    });
+    if(error){
+      if(/already registered/i.test(error.message)) return setMsg('reg-err', 'An account with this email already exists. Please sign in.');
+      if(/database error/i.test(error.message)) return setMsg('reg-err', 'This Student ID is already registered. Please sign in.');
+      if(/rate limit/i.test(error.message)) return setMsg('reg-err', 'Too many sign-ups right now. Please try again in a few minutes.');
+      return setMsg('reg-err', error.message);
+    }
+    // With email confirmation on, an existing email returns a user with no identities
+    if(data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0){
+      return setMsg('reg-err', 'An account with this email already exists. Please sign in.');
+    }
+    if(data.session){ await afterSignIn(); return; }
+
+    pendingVerifyEmail = email;
+    document.getElementById('check-msg').innerHTML =
+      `We sent a welcome email with a verification link to <strong>${esc(email)}</strong>.<br>` +
+      `Click the link to activate your account, then sign in with your Student ID <strong>${esc(sid)}</strong> or your email.`;
+    switchTab('check');
+    document.getElementById('login-id').value = sid;
+  }catch(e){
+    setMsg('reg-err', serverErrorText(e));
+    console.warn(e);
+  }finally{
+    setBusy('reg-btn', false);
+  }
+}
+
+async function doLogin(){
+  const identifier = (document.getElementById('login-id').value || '').trim();
+  const pass = document.getElementById('login-pass').value;
+  document.getElementById('resend-btn').style.display = 'none';
+  setMsg('login-msg', '');
+  if(!identifier || !pass) return setMsg('login-err', 'Please enter your Student ID or email, and your password.');
+  setMsg('login-err', '');
+  setBusy('login-btn', true, 'Signing in... ⏳');
+
+  try{
+    const { data:email, error:lookupErr } = await sb.rpc('login_email_for', { p_identifier:identifier });
+    if(lookupErr) throw lookupErr;
+    if(!email){
+      return setMsg('login-err', 'No account found for that Student ID. Used the old app? Create a new account with the same Student ID and your progress will be kept.');
+    }
+    const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+    if(error){
+      if(/not confirmed/i.test(error.message)){
+        pendingVerifyEmail = email;
+        document.getElementById('resend-btn').style.display = 'block';
+        return setMsg('login-err', 'Please verify your email first. Check your inbox (and spam folder).');
+      }
+      return setMsg('login-err', 'Incorrect Student ID / email or password.');
+    }
+    document.getElementById('login-pass').value = '';
+    await afterSignIn();
+  }catch(e){
+    setMsg('login-err', serverErrorText(e));
+    console.warn(e);
+  }finally{
+    setBusy('login-btn', false);
+  }
+}
+
+async function resendVerification(){
+  if(!pendingVerifyEmail) return;
+  const { error } = await sb.auth.resend({ type:'signup', email:pendingVerifyEmail, options:{ emailRedirectTo:appUrl() } });
+  if(error) return setMsg('login-err', /rate limit/i.test(error.message) ? 'Please wait a minute before asking for another email.' : error.message);
+  setMsg('login-err', '');
+  setMsg('login-msg', '📧 Verification email sent again. Check your inbox.');
+}
+
+async function sendPasswordReset(){
+  const email = (document.getElementById('forgot-email').value || '').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setMsg('forgot-err', 'Please enter a valid email address.');
+  setMsg('forgot-err', '');
+  setBusy('forgot-btn', true, 'Sending... ⏳');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo:appUrl() });
+  setBusy('forgot-btn', false);
+  if(error) return setMsg('forgot-err', /rate limit/i.test(error.message) ? 'Please wait a minute before asking for another email.' : error.message);
+  // Same message whether or not the account exists, so emails can't be probed
+  setMsg('forgot-msg', '📧 If an account exists for this email, a reset link is on its way.');
+}
+
+async function saveNewPassword(){
+  const p1 = document.getElementById('newpass-1').value;
+  const p2 = document.getElementById('newpass-2').value;
+  if(p1.length < 8) return setMsg('newpass-err', 'Password must be at least 8 characters.');
+  if(p1 !== p2) return setMsg('newpass-err', 'The two passwords do not match.');
+  setBusy('newpass-btn', true, 'Saving... ⏳');
+  const { error } = await sb.auth.updateUser({ password:p1 });
+  setBusy('newpass-btn', false);
+  if(error) return setMsg('newpass-err', error.message);
+  passwordRecovery = false;
+  toast('✓ Password updated');
+  await afterSignIn();
+}
+
+async function afterSignIn(){
+  await loadMyData();
+  if(location.hash) history.replaceState(null, '', appUrl());
+  initHome();
+  show('home');
+}
+
+async function doLogout(){
+  if(!g.guest && !confirm('Sign out of Vocab-King?')) return;
+  await sb.auth.signOut();
+  currentAdmin = null;
+  g.guest = false;
+  g.user = emptyUser();
+  resetProgressState();
+  show('register'); switchTab('login');
+}
+
+function skipReg(){
+  g.guest = true;
+  g.user = { ...emptyUser(), cohort:getActiveCohort().id };
+  resetProgressState();
+  initHome(); show('home');
+  toast('Guest mode: your progress will not be saved.');
+}
+
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
 function allWords(){return Object.values(VOCAB).flat().map(bd=>bd.words).flat();}
 function levelKey(progDay,bookDay){return `${progDay}_${bookDay}`;}
 function cleanKR(str){return String(str||'').replace(/[¹²³]/g,'').trim();}
 function getSentence(w){return SENTENCES[w] || SENTENCES[cleanKR(w)] || null;}
+
+// Escape text before inserting it into innerHTML (names, nicknames, admin-edited config)
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// Only allow http(s)/mailto/tel links from admin-edited config
+function safeUrl(u){
+  const s = String(u || '').trim();
+  return /^(https?:|mailto:|tel:)/i.test(s) ? s : '#';
+}
+
+// ── TYPED ANSWER CHECKING ──
+// Strips filler ("to be", "to", articles, parentheticals) so "close" matches "to be close / near",
+// but a fragment like "to b" or "the" no longer matches unrelated answers.
+function normalizeMeaning(str){
+  let s = String(str||'').toLowerCase()
+    .replace(/\([^)]*\)/g,' ')
+    .replace(/[^a-z0-9\s'-]/g,' ')
+    .replace(/\s+/g,' ').trim();
+  let prev;
+  do { prev = s; s = s.replace(/^(to be|to|a|an|the)\s+/,''); } while(s !== prev);
+  return s;
+}
+function editDistance(a,b){
+  const dp = Array.from({length:a.length+1},(_,i)=>[i]);
+  for(let j=1;j<=b.length;j++) dp[0][j]=j;
+  for(let i=1;i<=a.length;i++){
+    for(let j=1;j<=b.length;j++){
+      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+  }
+  return dp[a.length][b.length];
+}
+function matchesMeaning(typed, answer){
+  const t = normalizeMeaning(typed);
+  if(!t) return false;
+  const parts = [answer, ...String(answer||'').split(/[\/,;]/)].map(normalizeMeaning).filter(Boolean);
+  if(normalizeMeaning(String(typed).replace(/[\/,;]/g,' ')) === normalizeMeaning(String(answer).replace(/[\/,;]/g,' '))) return true;
+  return parts.some(p => p === t || (p.length >= 5 && editDistance(p, t) <= 1));
+}
+function matchesKorean(typed, word){
+  const t = String(typed||'').replace(/\s+/g,'');
+  return t.length > 0 && t === cleanKR(word).replace(/\s+/g,'');
+}
 
 function show(id){
   stopSpeech();
@@ -231,226 +545,20 @@ function pickDistractors(targetWord, pool, count=3){
   return result;
 }
 
-// ═══════════════════════════════════════════════════
-// SUPABASE DATABASE INTEGRATION
-// KDU Korean Program · Vocab King v3
-// ═══════════════════════════════════════════════════
-const SB_URL = "https://rrcinkfoszcpoblgnkeb.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyY2lua2Zvc3pjcG9ibGdua2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0Nzk3MjIsImV4cCI6MjA5ODA1NTcyMn0.4N0kdFCraOXCO3fpf_5XF7lN65X9pIXqAODFqyd5rqI";
-
-async function sbFetch(path, method='GET', body=null){
-  const opts = {
-    method,
-    headers: {
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + SB_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST'?'return=representation,resolution=merge-duplicates':''
-    }
-  };
-  if(body) opts.body = JSON.stringify(body);
-  try{
-    const r = await fetch(SB_URL + path, opts);
-    if(!r.ok) throw new Error(await r.text());
-    const txt = await r.text();
-    return txt ? JSON.parse(txt) : [];
-  }catch(e){ console.warn('DB error:', e.message); return null; }
-}
-
-async function dbRegisterStudent(user){
-  if(!user.name||!user.sid) return;
-  await sbFetch('/rest/v1/students', 'POST', {
-    student_id: user.sid,
-    name: user.name,
-    nickname: user.nick||'',
-    last_seen: new Date().toISOString()
-  });
-}
-
-async function dbUpdateLastSeen(sid){
-  if(!sid) return;
-  await sbFetch(`/rest/v1/students?student_id=eq.${sid}`, 'PATCH', {
-    last_seen: new Date().toISOString()
-  });
-}
-
-async function dbSaveProgress(sid, progDay, bookDay, correct, wrong, pct, streak){
-  if(!sid) return;
-  const key = progDay + '_' + bookDay;
-  await sbFetch('/rest/v1/progress', 'POST', {
-    student_id: sid,
-    prog_day: progDay,
-    book_day: bookDay,
-    level_key: key,
-    completed: correct >= 24,
-    correct,
-    wrong,
-    score_pct: pct,
-    best_streak: streak,
-    attempts: 1,
-    updated_at: new Date().toISOString()
-  });
-}
-
-async function dbSaveFailWords(sid, fails, progDay, bookDay){
-  if(!sid || !fails.length) return;
-  for(const f of fails){
-    await sbFetch('/rest/v1/fail_words', 'POST', {
-      student_id: sid,
-      word_kr: f.w,
-      word_en: f.e,
-      word_type: f.t||'',
-      prog_day: progDay,
-      book_day: bookDay,
-      fail_count: 1,
-      last_failed: new Date().toISOString()
-    });
-  }
-}
-
-async function dbClearMasteredWords(sid, words){
-  if(!sid || !words.length) return;
-  for(const w of words){
-    await sbFetch(`/rest/v1/fail_words?student_id=eq.${sid}&word_kr=eq.${encodeURIComponent(w.w)}`, 'DELETE');
-  }
-}
-
-async function dbLoadLeaderboard(){
-  const data = await sbFetch('/rest/v1/leaderboard?select=*&order=levels_done.desc,avg_score.desc&limit=20');
-  return data || [];
-}
-
-async function dbLoadMyProgress(sid){
-  if(!sid) return [];
-  return await sbFetch(`/rest/v1/progress?student_id=eq.${sid}&select=*`) || [];
-}
-
-async function dbLoadMyFails(sid){
-  if(!sid) return [];
-  return await sbFetch(`/rest/v1/fail_words?student_id=eq.${sid}&select=*`) || [];
-}
-
-// ── REGISTER ──
-function doRegister(){
-  const name=document.getElementById('reg-name').value.trim();
-  const sid=document.getElementById('reg-id').value.trim();
-  const nick=document.getElementById('reg-nick').value.trim();
-  const cohort=document.getElementById('reg-cohort')?.value || getActiveCohort().id;
-  const err=document.getElementById('reg-err');
-  if(!name){err.style.display='block';err.textContent='Please enter your full name.';return;}
-  if(!sid){err.style.display='block';err.textContent='Please enter your student ID.';return;}
-  err.style.display='none';
-  g.user={name:name.toUpperCase(),sid:sid.toUpperCase(),nick:nick,cohort:cohort};
-  save();
-  cacheStudentRecord(g.user);
-  dbRegisterStudent(g.user).then(()=>console.log('Registered in DB'));
-  initHome(); show('home');
-}
-function skipReg(){
-  g.user={name:'',sid:'',nick:'',cohort:getActiveCohort().id};
-  try{localStorage.setItem('topik_skip','1');}catch(e){}
-  initHome();show('home');
-}
-
-function switchTab(tab){
-  const isNew = tab==='new';
-  document.getElementById('panel-new').style.display=isNew?'flex':'none';
-  document.getElementById('panel-login').style.display=isNew?'none':'flex';
-  document.getElementById('tab-new').className = isNew ? 'tab-active' : 'tab-inactive';
-  document.getElementById('tab-login').className = isNew ? 'tab-inactive' : 'tab-active';
-  document.getElementById('tab-new').style.cssText = isNew
-    ? 'flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:var(--gold);color:var(--navy);transition:all 0.2s'
-    : 'flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:rgba(255,255,255,0.5);transition:all 0.2s';
-  document.getElementById('tab-login').style.cssText = isNew
-    ? 'flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:rgba(255,255,255,0.5);transition:all 0.2s'
-    : 'flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:var(--gold);color:var(--navy);transition:all 0.2s';
-}
-
-async function doLogin(){
-  const sid = document.getElementById('login-sid').value.trim();
-  const err = document.getElementById('login-err');
-  const found = document.getElementById('login-found');
-  const btn = document.getElementById('login-btn');
-  if(!sid){err.style.display='block';err.textContent='Please enter your Student ID.';return;}
-  err.style.display='none';
-
-  // Check if credentials correspond to an Administrator
-  const admins = getAdmins();
-  const matchedAdmin = admins.find(a => a.user.toLowerCase() === sid.toLowerCase());
-  if(matchedAdmin){
-    btn.disabled=false;
-    btn.textContent='Find My Profile 🔍';
-    openAdminLogin(matchedAdmin.user);
-    return;
-  }
-
-  btn.textContent='Searching... ⏳';
-  btn.disabled=true;
-
-  const data = await sbFetch('/rest/v1/students?student_id=eq.'+encodeURIComponent(sid)+'&select=*');
-  btn.disabled=false;
-
-  if(!data || data.length===0){
-    err.style.display='block';
-    err.textContent='Student ID not found. Please register as a new student.';
-    btn.textContent='Find My Profile 🔍';
-    found.style.display='none';
-    return;
-  }
-
-  const student = data[0];
-  found.style.display='block';
-  document.getElementById('login-found-name').textContent=student.name+(student.nickname?' ('+student.nickname+')':'');
-  btn.textContent='✓ Continue as '+( student.nickname||student.name.split(' ')[0])+' →';
-  btn.onclick=()=>completeLogin(student);
-}
-
-async function completeLogin(student){
-  g.user = {name:student.name, sid:student.student_id, nick:student.nickname||'', cohort:student.cohort||getActiveCohort().id};
-  save();
-  cacheStudentRecord(g.user);
-
-  const [dbProgress, dbFails] = await Promise.all([
-    dbLoadMyProgress(student.student_id),
-    dbLoadMyFails(student.student_id)
-  ]);
-
-  if(dbProgress && dbProgress.length>0){
-    dbProgress.forEach(p=>{
-      g.done[p.level_key] = p.completed;
-      g.dfails[p.level_key] = p.wrong||0;
-    });
-  }
-
-  if(dbFails && dbFails.length>0){
-    g.fails=[];
-    dbFails.forEach(f=>{
-      g.fails.push({w:f.word_kr, e:f.word_en, t:f.word_type||'명사'});
-    });
-  }
-
-  if(dbProgress){
-    const maxStreak=Math.max(0,...dbProgress.map(p=>p.best_streak||0));
-    if(maxStreak>g.best) g.best=maxStreak;
-  }
-
-  save();
-  dbUpdateLastSeen(student.student_id);
-  initHome();
-  show('home');
-}
-
 // ── HOME (With Phase 2 "Study 30 Words" & "Start Quiz" options) ──
 function initHome(){
-  load();
   populateCohortSelects();
   const disp=g.user.nick||g.user.name.split(' ')[0]||'';
   const cohortObj = getCohorts().find(c=>c.id===g.user.cohort);
   const cohortName = cohortObj ? cohortObj.name.replace(' (Current)','') : (g.user.cohort || '2026 Spring');
   const isCurrent = cohortObj ? cohortObj.active : true;
-  document.getElementById('welcome-strip').innerHTML=disp
-    ? `<span>👋 안녕하세요, <strong>${disp}</strong>!</span> <span class="cohort-badge ${isCurrent?'current':'alumni'}">${cohortName}</span>`
+  document.getElementById('welcome-strip').innerHTML=g.guest
+    ? `<span>👀 Guest mode — progress is not saved.</span> <span class="auth-link" onclick="doLogout()">Sign in or register</span>`
+    : disp
+    ? `<span>👋 안녕하세요, <strong>${esc(disp)}</strong>!</span>${g.user.sid ? ` <span class="cohort-badge ${isCurrent?'current':'alumni'}">${esc(cohortName)}</span>` : ''}`
     : '';
+  const logoutBtn=document.getElementById('logout-btn');
+  if(logoutBtn) logoutBtn.title = g.guest ? 'Sign in' : 'Sign out';
 
   const totalDone=Object.values(g.done).filter(Boolean).length;
   document.getElementById('sL').textContent=totalDone;
@@ -458,6 +566,12 @@ function initHome(){
   document.getElementById('sS').textContent=g.best;
   document.getElementById('fcnt').textContent=g.fails.length;
   document.getElementById('fail-btn').style.display=g.fails.length>0?'flex':'none';
+  const myCertBtn=document.getElementById('my-cert-btn');
+  if(myCertBtn){
+    const rec=getExamRecord();
+    myCertBtn.style.display=(rec && rec.passed)?'block':'none';
+    if(rec && rec.passed) myCertBtn.textContent=`📜  View My Certificate · 내 수료증 (${rec.best}%)`;
+  }
 
   const list=document.getElementById('days-list');
   list.innerHTML='';
@@ -697,7 +811,6 @@ function getWordStatus(item){
 }
 
 function openDictionary(){
-  load();
   const idx = buildDictionaryIndex();
   const posSelect = document.getElementById('dict-pos');
   const daySelect = document.getElementById('dict-day');
@@ -818,57 +931,39 @@ function renderDictionary(){
 let cachedLBData = [];
 
 async function renderLB(){
-  load();
   populateCohortSelects();
   const top3 = document.getElementById('lb-top3');
   const rest = document.getElementById('lb-list');
   if(top3) top3.innerHTML='<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);padding:20px">Loading... ⏳</div>';
   if(rest) rest.innerHTML='';
 
-  const [lbRaw, progRaw, cachedStuds] = await Promise.all([
-    dbLoadLeaderboard(),
-    sbFetch('/rest/v1/progress?select=student_id,correct&limit=2000'),
-    Promise.resolve(getCachedStudents())
-  ]);
-
-  const cohortMap = {};
-  cachedStuds.forEach(s => { if(s.sid) cohortMap[s.sid] = s.cohort; });
-
-  const wordMap = {};
-  (progRaw || []).forEach(r => {
-    wordMap[r.student_id] = (wordMap[r.student_id] || 0) + (r.correct || 0);
-  });
-
-  let combined = [...(lbRaw || [])];
-  if(g.user.name && g.user.sid && !combined.some(r => r.student_id === g.user.sid)){
-    const totalDone = Object.values(g.done).filter(Boolean).length;
-    combined.push({
-      student_id: g.user.sid,
-      name: g.user.name,
-      nickname: g.user.nick,
-      cohort: g.user.cohort || getActiveCohort().id,
-      levels_done: totalDone
-    });
-    wordMap[g.user.sid] = wordMap[g.user.sid] || (totalDone * 24);
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){
+    cachedLBData = [];
+    if(top3) top3.innerHTML = '';
+    if(rest) rest.innerHTML = '<div class="lb-empty">Sign in to see the class leaderboard 🏆</div>';
+    return;
   }
 
-  const activeCohortId = getActiveCohort().id;
+  const { data, error } = await sb.from('leaderboard').select('*')
+    .order('words_mastered', {ascending:false}).order('levels_done', {ascending:false}).limit(500);
+  if(error){
+    if(top3) top3.innerHTML = '';
+    if(rest) rest.innerHTML = '<div class="lb-empty">Could not load the leaderboard. Check your connection.</div>';
+    return;
+  }
 
-  cachedLBData = combined.map(r => {
-    const studentCohort = r.cohort || cohortMap[r.student_id] || (r.student_id === g.user.sid ? g.user.cohort : activeCohortId);
-    return {
-      name: r.name,
-      sid: r.student_id,
-      nick: r.nickname || '',
-      cohort: studentCohort,
-      words: wordMap[r.student_id] || (r.levels_done ? r.levels_done * 24 : 0),
-      levels: r.levels_done || 0
-    };
-  }).sort((a,b) => b.words - a.words);
+  cachedLBData = (data || []).map(r => ({
+    name: r.display_name || 'Student',
+    nick: r.display_name || '',
+    cohort: r.cohort,
+    words: r.words_mastered || 0,
+    levels: r.levels_done || 0,
+    isMe: !!r.is_me
+  }));
 
   const filterSelect = document.getElementById('lb-cohort-filter');
-  const selectedCohort = filterSelect ? filterSelect.value : 'all';
-  displayLBList(selectedCohort);
+  displayLBList(filterSelect ? filterSelect.value : 'all');
 }
 
 function filterLBByCohort(cohortId){
@@ -900,10 +995,10 @@ function displayLBList(cohortId){
     return `
       <div class="lb-podium${podiumMedals[i] === '🥇' ? ' p1' : ''}">
         <div class="lb-medal">${podiumMedals[i]}</div>
-        <div class="lb-pname">${e.nick || e.name.split(' ')[0]}</div>
+        <div class="lb-pname">${esc(e.nick || String(e.name||'').split(' ')[0])}</div>
         <div class="lb-pscore">${e.words}</div>
         <div class="lb-psub">words mastered</div>
-        <div style="margin-top:6px"><span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:2px 8px">${cName}</span></div>
+        <div style="margin-top:6px"><span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:2px 8px">${esc(cName)}</span></div>
       </div>`;
   }).join('');
 
@@ -916,10 +1011,10 @@ function displayLBList(cohortId){
         <div class="lb-rank">${i + 4}</div>
         <div class="lb-info">
           <div style="display:flex;align-items:center;gap:8px">
-            <span class="lb-name">${e.nick || e.name.split(' ')[0]}</span>
-            <span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:1px 6px">${cName}</span>
+            <span class="lb-name">${esc(e.nick || String(e.name||'').split(' ')[0])}</span>
+            <span class="cohort-badge ${isCur ? 'current' : 'alumni'}" style="font-size:10px;padding:1px 6px">${esc(cName)}</span>
           </div>
-          <div class="lb-meta">${e.name} · ${e.sid || 'Guest'}</div>
+          <div class="lb-meta">${e.levels} levels done${e.isMe ? ' · <strong style="color:var(--gold)">You</strong>' : ''}</div>
         </div>
         <div class="lb-score">${e.words} words</div>
       </div>`;
@@ -933,7 +1028,7 @@ function startLevel(progDay,bookDay,wordsArr){
   g.progDay=progDay; g.bookDay=bookDay;
   g.words=wordsArr;
   g.queue=shuffle([...wordsArr]);
-  g.sfails=[]; g.ok=g.bad=g.idx=g.streak=0; g.answered=false;
+  g.sfails=[]; g.ok=g.bad=g.idx=g.streak=g.runBest=0; g.answered=false;
   g.mode='level';
   document.getElementById('nxtbtn').onclick = null;
   document.getElementById('nxtbtn').style.display = 'block';
@@ -1124,15 +1219,7 @@ function frTestCard(){
 function frCheckAnswer(){
   const fr = g.fr;
   const word = fr.batch[fr.testIdx];
-  const typed = document.getElementById('tfield').value.trim().toLowerCase();
-  const correct = word.e.toLowerCase();
-
-  const ok = typed.length > 0 && (
-    typed === correct
-    || (correct.includes(typed) && typed.length >= 3)
-    || (typed.includes(correct.split('/')[0].trim()) && correct.split('/')[0].trim().length > 0)
-    || correct.split('/').some(p => typed.includes(p.trim().toLowerCase()) && p.trim().length >= 3)
-  );
+  const ok = matchesMeaning(document.getElementById('tfield').value, word.e);
 
   const fb  = document.getElementById('fbcard');
   const fbv = document.getElementById('fbv');
@@ -1190,7 +1277,6 @@ function frShowResults(){
     dbClearMasteredWords(g.user.sid, fr.mastered)
       .then(()=>console.log('Mastered words cleared from DB'));
   }
-  save();
 
   const pct = Math.round((masteredCount / fr.batch.length)*100);
   document.getElementById('rpct').textContent = pct+'%';
@@ -1217,7 +1303,7 @@ function frShowResults(){
     const fptitleEl = document.getElementById('fptitle');
     if(fptitleEl) fptitleEl.textContent = '📚 Still Struggling';
     flist.innerHTML = fr.struggling.map(f=>
-      `<div class="frow"><span class="fkr">${f.w}</span><span class="fen">${f.e}</span></div>`
+      `<div class="frow"><span class="fkr">${esc(f.w)}</span><span class="fen">${esc(f.e)}</span></div>`
     ).join('');
   }else{
     fpanel.style.display = 'none';
@@ -1312,6 +1398,7 @@ function renderQ(){
   wc.classList.remove('fi'); void wc.offsetWidth; wc.classList.add('fi');
 
   const qt=QT[g.idx%QT.length];
+  g.qt=qt;
   const all=allWords();
   const kbdHint = document.getElementById('kbd-hint');
   if(kbdHint) kbdHint.textContent = '💡 Keys: 1–4 select answer · Enter/Space next · R audio';
@@ -1374,7 +1461,7 @@ function renderMC(opts,isOk,field,q){
       if(g.answered)return; g.answered=true;
       document.querySelectorAll('.opt').forEach(x=>x.disabled=true);
       const ok=isOk(opt);
-      if(ok){b.classList.add('correct');g.ok++;g.streak++;if(g.streak>g.best)g.best=g.streak;}
+      if(ok){b.classList.add('correct');g.ok++;g.streak++;g.runBest=Math.max(g.runBest,g.streak);if(g.streak>g.best)g.best=g.streak;}
       else{b.classList.add('wrong');g.bad++;g.streak=0;g.sfails.push(q);
         document.querySelectorAll('.opt').forEach(x=>{
           if(field==='e'&&x.dataset.val===q.e)x.classList.add('reveal');
@@ -1391,18 +1478,10 @@ function renderMC(opts,isOk,field,q){
 function doType(){
   if(g.answered)return;
   const q=g.queue[g.idx];
-  const chip=document.getElementById('qchip').textContent;
   const tf=document.getElementById('tfield');
-  const val=tf.value.trim().toLowerCase();
   g.answered=true;
-  let ok=false;
-  if(chip.includes('Korean')){
-    ok = val === q.w.toLowerCase() || val === cleanKR(q.w).toLowerCase();
-  }else{
-    const parts=q.e.toLowerCase().split('/').map(p=>p.trim());
-    ok=parts.some(p=>val===p)||(val.length>2&&parts.some(p=>p.includes(val)));
-  }
-  if(ok){tf.classList.add('correct');g.ok++;g.streak++;if(g.streak>g.best)g.best=g.streak;}
+  const ok = g.qt==='type-en-kr' ? matchesKorean(tf.value, q.w) : matchesMeaning(tf.value, q.e);
+  if(ok){tf.classList.add('correct');g.ok++;g.streak++;g.runBest=Math.max(g.runBest,g.streak);if(g.streak>g.best)g.best=g.streak;}
   else{tf.classList.add('wrong');g.bad++;g.streak=0;g.sfails.push(q);}
   document.getElementById('chkbtn').disabled=true;
   document.getElementById('strk').textContent='🔥 '+g.streak;
@@ -1466,40 +1545,20 @@ function showFB(ok,q){
 
 function showResults(){
   const k=levelKey(g.progDay,g.bookDay);
-  if(g.mode==='fail'){
-    const passed=new Set(g.queue.filter(w=>!g.sfails.find(f=>f.w===w.w)).map(w=>w.w));
-    g.fails=g.fails.filter(f=>!passed.has(f.w));
-  }else{
-    g.sfails.forEach(f=>{if(!g.fails.find(x=>x.w===f.w))g.fails.push(f);});
-    g.done[k]=g.ok>=24;
-    g.dfails[k]=g.sfails.length;
-  }
-  save();
+  const mastered=g.queue.filter(w=>!g.sfails.find(f=>f.w===w.w));
+  // Same rules as the database: new fails are added, words answered correctly leave the review list,
+  // and a completed level stays completed even after a weaker retry
+  const masteredSet=new Set(mastered.map(w=>w.w));
+  g.fails=g.fails.filter(f=>!masteredSet.has(f.w));
+  g.sfails.forEach(f=>{if(!g.fails.find(x=>x.w===f.w))g.fails.push(f);});
+  g.done[k]=!!g.done[k] || g.ok>=24;
+  g.dfails[k]=g.sfails.length;
 
   if(g.user.sid && g.mode==='level'){
     const pct2=(g.ok+g.bad)>0?Math.round(g.ok/(g.ok+g.bad)*100):0;
-    dbSaveProgress(g.user.sid, g.progDay, g.bookDay, g.ok, g.bad, pct2, g.best)
-      .then(()=>console.log('Progress saved to DB'));
-    if(g.sfails.length>0){
-      dbSaveFailWords(g.user.sid, g.sfails, g.progDay, g.bookDay)
-        .then(()=>console.log('Fail words saved'));
-    }
-    const mastered=g.queue.filter(w=>!g.sfails.find(f=>f.w===w.w));
-    if(mastered.length>0){
-      dbClearMasteredWords(g.user.sid, mastered)
-        .then(()=>console.log('Mastered words cleared'));
-    }
-  }
-
-  if(g.user.name){
-    try{
-      const lb=JSON.parse(localStorage.getItem('topik_lb')||'[]');
-      const totalDone=Object.values(g.done).filter(Boolean).length;
-      const idx=lb.findIndex(e=>e.sid===g.user.sid);
-      const entry={name:g.user.name,sid:g.user.sid,nick:g.user.nick,levels:totalDone,best:g.best};
-      if(idx>=0)lb[idx]=entry; else lb.push(entry);
-      localStorage.setItem('topik_lb',JSON.stringify(lb));
-    }catch(e){}
+    dbSaveProgress(g.user.sid, g.progDay, g.bookDay, g.ok, g.bad, pct2, g.runBest);
+    dbSaveFailWords(g.user.sid, g.sfails, g.progDay, g.bookDay);
+    dbClearMasteredWords(g.user.sid, mastered);
   }
 
   const total=g.ok+g.bad;
@@ -1528,7 +1587,7 @@ function showResults(){
     fp.style.display='block';
     const fptitleEl = document.getElementById('fptitle');
     if(fptitleEl) fptitleEl.textContent = '❌ Words to Memorize';
-    fl.innerHTML=g.sfails.map(f=>`<div class="frow"><span class="fkr">${f.w}</span><span class="fen">${f.e}</span></div>`).join('');
+    fl.innerHTML=g.sfails.map(f=>`<div class="frow"><span class="fkr">${esc(f.w)}</span><span class="fen">${esc(f.e)}</span></div>`).join('');
   }else fp.style.display='none';
 
   document.getElementById('r-retry').style.display=g.sfails.length>0?'block':'none';
@@ -1606,12 +1665,15 @@ function buildExamQuestions(){
         opts:opts.map(o=>o.w), ans:opts.findIndex(o=>o.w===word.w),
         isKoreanOpts:true, smallPrompt:true};
     } else if(type===3){
-      const syn = SYNONYMS[word.w] || SYNONYMS[cleanKR(word.w)];
-      if(syn){
-        const wrongOpts=others.filter(o=>cleanKR(o.w)!==syn).map(o=>o.w);
-        while(wrongOpts.length<3){
-          const extra = all.find(x=>cleanKR(x.w)!==cleanKR(word.w) && cleanKR(x.w)!==syn && !wrongOpts.includes(x.w));
-          if(extra) wrongOpts.push(extra.w); else break;
+      const synList = (typeof SYNONYMS !== 'undefined') ? (SYNONYMS[cleanKR(word.w)] || []) : [];
+      if(synList.length){
+        const syn = synList[Math.floor(Math.random()*synList.length)];
+        // Exclude the word itself and every valid synonym so only one option is correct
+        const blocked = new Set([cleanKR(word.w), ...synList]);
+        const wrongOpts=others.filter(o=>!blocked.has(cleanKR(o.w))).map(o=>o.w);
+        for(const x of shuffle(all.filter(x=>x.t===word.t))){
+          if(wrongOpts.length>=3) break;
+          if(!blocked.has(cleanKR(x.w)) && !wrongOpts.some(w=>cleanKR(w)===cleanKR(x.w))) wrongOpts.push(x.w);
         }
         const opts=shuffle([syn,...wrongOpts.slice(0,3)]);
         return {type:'synonym',word,
@@ -1727,12 +1789,16 @@ function renderExamQ(){
 function finishExam(){
   const pct=Math.round(examCorrect/EXAM_TOTAL*100);
   const passed=pct>=PASS_PCT; const advanced=pct>=ADV_PCT;
+
+  // Keep the best attempt; a later, lower score never replaces a pass (the database applies the same rule)
+  const prev = getExamRecord();
+  if(!prev || pct > (prev.best||0)){
+    g.exam = { best:pct, passed:passed || !!(prev && prev.passed), advanced, date:new Date().toISOString() };
+  }
   if(g.user.sid){
-    sbFetch('/rest/v1/progress','POST',{
-      student_id:g.user.sid,prog_day:0,book_day:0,level_key:'final_exam',
-      completed:passed,correct:examCorrect,wrong:EXAM_TOTAL-examCorrect,
-      score_pct:pct,best_streak:examCorrect,attempts:1,
-      updated_at:new Date().toISOString()
+    sb.rpc('record_exam_result', { p_correct:examCorrect, p_total:EXAM_TOTAL }).then(({ data, error })=>{
+      if(error) return reportDbError(error, 'your exam result');
+      if(data) g.exam = { best:data.best, passed:data.passed, advanced:data.best >= ADV_PCT, date:data.date };
     });
   }
   if(passed){showCertificate(pct,advanced);}
@@ -1740,7 +1806,7 @@ function finishExam(){
     document.getElementById('fail-score-display').textContent=pct+'%';
     document.getElementById('fail-correct-display').textContent=examCorrect+' / '+EXAM_TOTAL+' correct';
     document.getElementById('exam-fail-words').innerHTML=examWrong.slice(0,10).map(w=>
-      `<div class="frow"><span class="fkr">${w.w}</span><span class="fen">${w.e}</span></div>`
+      `<div class="frow"><span class="fkr">${esc(w.w)}</span><span class="fen">${esc(w.e)}</span></div>`
     ).join('')+(examWrong.length>10?`<div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;padding:6px">+${examWrong.length-10} more</div>`:'');
     show('exam-failed');
   }
@@ -1762,17 +1828,10 @@ const DEFAULT_CERT_CONFIG = {
 };
 
 function getCertConfig(){
-  try {
-    const raw = localStorage.getItem('topik_cert_config');
-    if(raw){
-      const parsed = JSON.parse(raw);
-      return { ...DEFAULT_CERT_CONFIG, ...parsed };
-    }
-  } catch(e){}
-  return DEFAULT_CERT_CONFIG;
+  return { ...DEFAULT_CERT_CONFIG, ...certConfigCache };
 }
 
-function saveCertConfig(){
+async function saveCertConfig(){
   const cfg = {
     institution: document.getElementById('cert-cfg-inst')?.value.trim() || DEFAULT_CERT_CONFIG.institution,
     department: document.getElementById('cert-cfg-sub')?.value.trim() || DEFAULT_CERT_CONFIG.department,
@@ -1786,10 +1845,11 @@ function saveCertConfig(){
     honorsPct: DEFAULT_CERT_CONFIG.honorsPct
   };
   try {
-    localStorage.setItem('topik_cert_config', JSON.stringify(cfg));
-    alert('Certificate template saved successfully! All newly generated certificates will reflect these changes.');
+    await saveSetting('cert_config', cfg);
+    certConfigCache = cfg;
+    toast('✓ Certificate template saved for everyone');
   } catch(e){
-    alert('Failed to save certificate template: ' + e.message);
+    toast('Failed to save certificate template: ' + e.message, 'error');
   }
 }
 
@@ -1816,7 +1876,13 @@ function previewCustomCert(){
   });
 }
 
-function showCertificate(pct,advanced,customStudent){
+function openMyCertificate(){
+  const rec = getExamRecord();
+  if(!rec || !rec.passed) return;
+  showCertificate(rec.best, rec.advanced, null, rec.date);
+}
+
+function showCertificate(pct,advanced,customStudent,issuedISO){
   document.getElementById('cert-level-badge').textContent=advanced?'🏅 ADVANCED LEVEL 2 CERTIFICATE':'📜 TOPIK I CERTIFICATE';
   document.getElementById('cert-sub').textContent=`Score: ${pct}% · ${advanced?'Advanced':'Standard'} · Korean Language Program`;
   const name=customStudent?.name || g.user.name || 'STUDENT';
@@ -1824,7 +1890,7 @@ function showCertificate(pct,advanced,customStudent){
   const cohortId=customStudent?.cohort || g.user.cohort || getActiveCohort().id;
   const cohortObj=getCohorts().find(c=>c.id===cohortId);
   const cohortName=cohortObj ? cohortObj.name.replace(' (Current)','') : (cohortId || '2026 Spring');
-  const dateStr=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const dateStr=(issuedISO ? new Date(issuedISO) : new Date()).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   document.getElementById('cert-preview').innerHTML=buildCertHTML(name,sid,pct,advanced,dateStr,cohortName);
   show('cert-screen');
 }
@@ -1842,8 +1908,8 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
   return `<div id="cert-content" style="font-family:Georgia,serif;background:#FEFEFE;padding:32px 28px;border:6px solid ${bc};box-shadow:inset 0 0 0 3px ${ac};">
     <div style="text-align:center;margin-bottom:14px">
       <img src="${logo}" style="width:72px;height:auto;margin-bottom:6px;object-fit:contain" alt="Vocab-King Logo">
-      <div style="font-size:12px;font-weight:700;color:${bc};letter-spacing:3px;text-transform:uppercase">${cfg.institution}</div>
-      <div style="font-size:10px;font-weight:600;color:#6B7280;letter-spacing:2px;text-transform:uppercase;margin-top:2px">${cfg.department}</div>
+      <div style="font-size:12px;font-weight:700;color:${bc};letter-spacing:3px;text-transform:uppercase">${esc(cfg.institution)}</div>
+      <div style="font-size:10px;font-weight:600;color:#6B7280;letter-spacing:2px;text-transform:uppercase;margin-top:2px">${esc(cfg.department)}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,${bc})"></div>
@@ -1851,16 +1917,16 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
       <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,${bc})"></div>
     </div>
     <div style="text-align:center;margin-bottom:12px">
-      <div style="font-size:9px;letter-spacing:4px;color:#888;text-transform:uppercase;margin-bottom:4px">${cfg.title}</div>
+      <div style="font-size:9px;letter-spacing:4px;color:#888;text-transform:uppercase;margin-bottom:4px">${esc(cfg.title)}</div>
       <div style="font-size:19px;font-weight:700;color:#1a1a2e">${lt}</div>
     </div>
     <div style="text-align:center;font-size:11px;color:#777;margin-bottom:4px;font-style:italic">This is proudly awarded to</div>
-    <div style="text-align:center;font-size:23px;font-weight:700;color:#1a1a2e;margin-bottom:4px;letter-spacing:0.5px">${name}</div>
+    <div style="text-align:center;font-size:23px;font-weight:700;color:#1a1a2e;margin-bottom:4px;letter-spacing:0.5px">${esc(name)}</div>
     <div style="text-align:center;font-size:11px;color:#666;margin-bottom:12px">
-      <span>Student ID: <strong>${sid}</strong></span> · <span>Semester Cohort: <strong>${cohortDisplay}</strong></span>
+      <span>Student ID: <strong>${esc(sid)}</strong></span> · <span>Semester Cohort: <strong>${esc(cohortDisplay)}</strong></span>
     </div>
     <div style="text-align:center;font-size:11.5px;color:#444;line-height:1.65;margin-bottom:14px;padding:0 8px">
-      ${cfg.body}
+      ${esc(cfg.body)}
     </div>
     <div style="text-align:center;margin-bottom:14px">
       <div style="display:inline-block;background:linear-gradient(135deg,${bc},${ac});color:#fff;font-size:26px;font-weight:900;padding:10px 28px;border-radius:10px;box-shadow:0 4px 12px rgba(79,70,229,0.25)">${pct}%</div>
@@ -1873,11 +1939,11 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end">
       <div style="text-align:center">
-        <div style="font-size:20px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:2px">${cfg.sigName.replace('Prof. ','')}</div>
+        <div style="font-size:20px;font-family:'Brush Script MT',cursive;color:#1a1a2e;margin-bottom:2px">${esc(cfg.sigName.replace('Prof. ',''))}</div>
         <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
-        <div style="font-size:10px;font-weight:700;color:#222">${cfg.sigName}</div>
-        <div style="font-size:8.5px;color:#666">${cfg.sigTitle}</div>
-        <div style="font-size:8px;color:#888">${cfg.sigDept || 'Korean Language Program'}</div>
+        <div style="font-size:10px;font-weight:700;color:#222">${esc(cfg.sigName)}</div>
+        <div style="font-size:8.5px;color:#666">${esc(cfg.sigTitle)}</div>
+        <div style="font-size:8px;color:#888">${esc(cfg.sigDept || 'Korean Language Program')}</div>
       </div>
       <div style="text-align:center">
         <div style="width:50px;height:50px;border-radius:50%;border:2px solid ${bc};display:flex;align-items:center;justify-content:center;margin:0 auto 4px;background:#fafafa">
@@ -1889,12 +1955,12 @@ function buildCertHTML(name,sid,pct,advanced,dateStr,cohortName){
         <div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:4px">${dateStr}</div>
         <div style="width:125px;height:1px;background:#aaa;margin-bottom:4px"></div>
         <div style="font-size:10px;font-weight:700;color:#222">Date of Issue</div>
-        <div style="font-size:8.5px;color:#666">${cfg.location}</div>
+        <div style="font-size:8.5px;color:#666">${esc(cfg.location)}</div>
       </div>
     </div>
     <div style="margin-top:14px;padding:9px 12px;background:#f8f9fa;border-radius:6px;border:1px solid #e2e8f0;text-align:center;font-size:8.5px;color:#475569;line-height:1.45">
-      <div>${cfg.credits}</div>
-      <div style="margin-top:2px;font-size:8px;color:#94a3b8">${cfg.institution.toUpperCase()} · 쏙쏙 어휘왕 VOCAB-KING CERTIFICATION</div>
+      <div>${esc(cfg.credits)}</div>
+      <div style="margin-top:2px;font-size:8px;color:#94a3b8">${esc(cfg.institution.toUpperCase())} · 쏙쏙 어휘왕 VOCAB-KING CERTIFICATION</div>
     </div>
   </div>`;
 }
@@ -1923,8 +1989,16 @@ async function downloadCert(){
 }
 
 // ── EVENTS & KEYBOARD NAVIGATION (Phase 1) ──
-document.getElementById('intro-btn').addEventListener('click',()=>{load();if(!g.user.name && !localStorage.getItem('topik_skip')){show('register');}else{initHome();show('home');}});
-document.getElementById('back-btn').addEventListener('click',()=>{stopSpeech();g.mode='';save();initHome();show('home');});
+document.getElementById('intro-btn').addEventListener('click',async ()=>{
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session || g.guest){ initHome(); show('home'); }
+  else { show('register'); switchTab('login'); }
+});
+document.getElementById('back-btn').addEventListener('click',()=>{
+  const midQuiz = (g.mode==='level' && g.idx>0 && g.idx<g.queue.length) || (g.mode==='exam' && examIdx>0 && examIdx<examQ.length);
+  if(midQuiz && !confirm('Leave now? This attempt will not be saved.')) return;
+  stopSpeech();g.mode='';initHome();show('home');
+});
 document.getElementById('chkbtn').addEventListener('click',()=>{if(g.mode==='fr')frCheckAnswer();else doType();});
 document.getElementById('r-home').addEventListener('click',()=>{initHome();show('home');});
 document.getElementById('fail-btn').addEventListener('click',()=>startFailReview());
@@ -2042,85 +2116,31 @@ document.addEventListener('keydown', e=>{
 // ═══════════════════════════════════════════════════
 // ADMIN MANAGEMENT & TWO-TIER FACULTY/DEVELOPER SYSTEM
 // ═══════════════════════════════════════════════════
-const DEFAULT_ADMINS = [
-  {
-    id: 'adm_super_crispin',
-    name: 'Alingilya Crispin Njewa',
-    user: 'crispin',
-    pass: 'admin1234',
-    role: 'super',
-    roleName: 'Lead Developer & Super Admin',
-    created: '2026-03-01'
-  },
-  {
-    id: 'adm_academic_yoon',
-    name: 'Prof. Hyejoon Yoon',
-    user: 'prof_yoon',
-    pass: 'kdu2026',
-    role: 'academic',
-    roleName: 'Academic Supervisor & Course Evaluator',
-    created: '2026-03-01'
-  }
-];
-
-function getAdmins(){
-  try {
-    const raw = localStorage.getItem('topik_admins');
-    if(raw){
-      const parsed = JSON.parse(raw);
-      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch(e){}
-  return DEFAULT_ADMINS;
-}
-
-function saveAdmins(list){
-  try { localStorage.setItem('topik_admins', JSON.stringify(list)); } catch(e){}
-}
-
-let currentAdmin = null;
+// Admin access comes from the `admins` table in the database (see supabase/setup.sql).
+// Admins sign in with their Supabase account email + password like everyone else.
 let adminCachedStudents = [];
 
-function openAdminLogin(prefillUser=''){
-  // Check if an existing session is saved
-  try {
-    const sessRaw = sessionStorage.getItem('vk_admin_session');
-    if(sessRaw){
-      const sess = JSON.parse(sessRaw);
-      const all = getAdmins();
-      const valid = all.find(a => a.id === sess.id && a.user === sess.user);
-      if(valid){
-        currentAdmin = valid;
-        show('admin');
-        const authCard = document.getElementById('admin-auth-card');
-        const dashCard = document.getElementById('admin-dashboard');
-        if(authCard) authCard.style.display = 'none';
-        if(dashCard) dashCard.style.display = 'block';
-        updateAdminRoleUI();
-        populateCohortSelects();
-        renderAdminDashboard();
-        return;
-      }
-    }
-  } catch(e){}
-
-  currentAdmin = null;
+function showAdminDashboard(){
   show('admin');
-  const authCard = document.getElementById('admin-auth-card');
-  const dashCard = document.getElementById('admin-dashboard');
-  if(authCard) authCard.style.display = 'block';
-  if(dashCard) dashCard.style.display = 'none';
+  document.getElementById('admin-auth-card').style.display = 'none';
+  document.getElementById('admin-dashboard').style.display = 'block';
+  updateAdminRoleUI();
+  populateCohortSelects();
+  switchAdminTab('overview');
+  renderAdminDashboard();
+}
 
+function openAdminLogin(){
+  if(currentAdmin){ showAdminDashboard(); return; }
+  show('admin');
+  document.getElementById('admin-auth-card').style.display = 'block';
+  document.getElementById('admin-dashboard').style.display = 'none';
+  setMsg('admin-auth-err', '');
   const userInput = document.getElementById('admin-user-input');
   const passInput = document.getElementById('admin-pass-input');
-  const err = document.getElementById('admin-auth-err');
-  if(err) err.style.display = 'none';
-  if(userInput){
-    userInput.value = prefillUser || '';
-    if(!prefillUser) setTimeout(()=>userInput.focus(), 150);
-    else if(passInput) setTimeout(()=>passInput.focus(), 150);
-  }
-  if(passInput) passInput.value = '';
+  userInput.value = g.user.email || '';
+  passInput.value = '';
+  setTimeout(()=>(userInput.value ? passInput : userInput).focus(), 150);
 }
 
 // Backward compatibility alias
@@ -2128,74 +2148,43 @@ function openAdmin(){
   openAdminLogin();
 }
 
-function doAdminAuth(){
-  const userEl = document.getElementById('admin-user-input');
+async function doAdminAuth(){
+  const email = (document.getElementById('admin-user-input').value || '').trim().toLowerCase();
   const passEl = document.getElementById('admin-pass-input');
-  const errEl = document.getElementById('admin-auth-err');
+  if(!email || !passEl.value) return setMsg('admin-auth-err', 'Please enter both email and password.');
 
-  const username = (userEl ? userEl.value : '').trim().toLowerCase();
-  const password = (passEl ? passEl.value : '').trim();
-
-  if(!username || !password){
-    if(errEl){
-      errEl.style.display = 'block';
-      errEl.textContent = 'Please enter both username and password.';
-    }
+  const { error } = await sb.auth.signInWithPassword({ email, password:passEl.value });
+  passEl.value = '';
+  if(error){
+    setMsg('admin-auth-err', /not confirmed/i.test(error.message) ? 'Please verify this email address first.' : 'Access restricted: invalid email or password.');
+    passEl.focus();
     return;
   }
-
-  const admins = getAdmins();
-  const match = admins.find(a => a.user.toLowerCase() === username && a.pass === password);
-
-  if(match){
-    currentAdmin = match;
-    try {
-      sessionStorage.setItem('vk_admin_session', JSON.stringify({
-        id: match.id,
-        user: match.user,
-        name: match.name,
-        role: match.role
-      }));
-    } catch(e){}
-
-    const authCard = document.getElementById('admin-auth-card');
-    const dashCard = document.getElementById('admin-dashboard');
-    if(authCard) authCard.style.display = 'none';
-    if(dashCard) dashCard.style.display = 'block';
-
-    updateAdminRoleUI();
-    populateCohortSelects();
-    renderAdminDashboard();
-  } else {
-    if(errEl){
-      errEl.style.display = 'block';
-      errEl.textContent = 'Access restricted: Invalid username or password.';
-    }
-    if(passEl){
-      passEl.value = '';
-      passEl.focus();
-    }
+  await loadMyData();
+  initHome();
+  if(!currentAdmin){
+    setMsg('admin-auth-err', 'You are signed in, but this account does not have admin access.');
+    return;
   }
+  showAdminDashboard();
 }
 
 function updateAdminRoleUI(){
   if(!currentAdmin) return;
-  const userLabel = document.getElementById('adm-cur-user');
-  if(userLabel){
-    userLabel.textContent = `${currentAdmin.name} (${currentAdmin.roleName || currentAdmin.role})`;
-  }
-
+  const roleNames = {
+    super: 'Super Admin & Lead Developer',
+    academic: 'Academic Admin (Faculty / Supervisor)',
+    'co-admin': 'Co-Administrator'
+  };
+  document.getElementById('adm-cur-user').textContent = `${currentAdmin.name} (${roleNames[currentAdmin.role] || currentAdmin.role})`;
   // Only Super Admin can manage other administrators
   const adminTab = document.getElementById('atab-admins');
-  if(adminTab){
-    adminTab.style.display = (currentAdmin.role === 'super') ? 'inline-block' : 'none';
-  }
+  if(adminTab) adminTab.style.display = (currentAdmin.role === 'super') ? 'inline-block' : 'none';
 }
 
+// "Lock" signs the admin out of this device
 function adminLock(){
-  try { sessionStorage.removeItem('vk_admin_session'); } catch(e){}
-  currentAdmin = null;
-  show('home');
+  doLogout();
 }
 
 function switchAdminTab(tab){
@@ -2228,88 +2217,76 @@ function switchAdminTab(tab){
 }
 
 // ── ADMIN ACCESS MANAGEMENT (Super Admin Only) ──
-function renderAdminList(){
+const ADMIN_ERRORS = {
+  USER_NOT_FOUND: 'No account uses that email yet. Ask them to register in the app first, or add them in Supabase → Authentication → Users.',
+  NOT_ALLOWED: 'Permission denied. Only a Super Admin can manage administrators.',
+  CANNOT_REMOVE_SELF: 'You cannot remove your own admin access.',
+  INVALID_ROLE: 'Please choose a valid role.'
+};
+function adminErrorText(error){
+  const key = Object.keys(ADMIN_ERRORS).find(k => (error.message || '').includes(k));
+  return key ? ADMIN_ERRORS[key] : error.message;
+}
+
+async function renderAdminList(){
   const listEl = document.getElementById('adm-all-admins-list');
   if(!listEl) return;
-  const admins = getAdmins();
-  listEl.innerHTML = admins.map(a => {
+  const { data, error } = await sb.from('admins').select('*').order('created_at');
+  if(error){ listEl.innerHTML = '<div style="font-size:11px;color:var(--red)">Could not load administrators.</div>'; return; }
+  listEl.innerHTML = (data || []).map(a => {
     const isSuper = a.role === 'super';
-    const canDelete = !isSuper && currentAdmin && currentAdmin.role === 'super' && a.id !== currentAdmin.id;
+    const canDelete = !isSuper && currentAdmin && currentAdmin.role === 'super' && a.user_id !== currentAdmin.user_id;
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:6px">
         <div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-weight:700;color:#fff">${a.name}</span>
-            <span class="cohort-badge ${isSuper ? 'current' : 'alumni'}" style="font-size:9px;text-transform:uppercase">${a.roleName || a.role}</span>
+            <span style="font-weight:700;color:#fff">${esc(a.name)}</span>
+            <span class="cohort-badge ${isSuper ? 'current' : 'alumni'}" style="font-size:9px;text-transform:uppercase">${esc(a.role)}</span>
           </div>
           <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px">
-            Username: <code>${a.user}</code> · Created: ${a.created || '2026-03-01'}
+            ${esc(a.email)} · Added: ${esc(String(a.created_at || '').slice(0, 10))}
           </div>
         </div>
         <div>
-          ${canDelete ? `<button class="btn-ro" style="padding:4px 10px;font-size:10px;border-color:rgba(239,68,68,0.4);color:var(--red)" onclick="deleteAdmin('${a.id}')">Remove ✕</button>` : `<span style="font-size:10px;color:rgba(255,255,255,0.3)">Protected</span>`}
+          ${canDelete ? `<button class="btn-ro" style="padding:4px 10px;font-size:10px;border-color:rgba(239,68,68,0.4);color:var(--red)" onclick="deleteAdmin(${esc(JSON.stringify(a.user_id))}, ${esc(JSON.stringify(a.name))})">Remove ✕</button>` : `<span style="font-size:10px;color:rgba(255,255,255,0.3)">Protected</span>`}
         </div>
       </div>`;
   }).join('');
 }
 
-function addNewAdmin(){
-  if(!currentAdmin || currentAdmin.role !== 'super'){
-    alert('Permission denied. Only the Super Admin (Alingilya Crispin Njewa) can register new administrators.');
-    return;
-  }
-  const name = (document.getElementById('new-adm-name')?.value || '').trim();
-  const user = (document.getElementById('new-adm-user')?.value || '').trim().toLowerCase();
-  const pass = (document.getElementById('new-adm-pass')?.value || '').trim();
-  const role = document.getElementById('new-adm-role')?.value || 'academic';
+async function addNewAdmin(){
+  if(!currentAdmin || currentAdmin.role !== 'super') return toast(ADMIN_ERRORS.NOT_ALLOWED, 'error');
+  const name = (document.getElementById('new-adm-name').value || '').trim();
+  const email = (document.getElementById('new-adm-user').value || '').trim().toLowerCase();
+  const role = document.getElementById('new-adm-role').value || 'academic';
+  if(!name || !email) return toast('Please enter the name and account email.', 'error');
 
-  if(!name || !user || !pass){
-    alert('Please enter Name, Username, and Password.');
-    return;
-  }
-
-  const admins = getAdmins();
-  if(admins.find(a => a.user.toLowerCase() === user)){
-    alert(`Administrator username "${user}" is already taken. Please choose another username.`);
-    return;
-  }
-
-  const roleNameMap = {
-    super: 'Super Admin & Lead Developer',
-    academic: 'Academic Admin (Faculty / Supervisor)',
-    'co-admin': 'Co-Administrator'
-  };
-
-  const newAdmin = {
-    id: 'adm_' + Date.now(),
-    name,
-    user,
-    pass,
-    role,
-    roleName: roleNameMap[role] || 'Administrator',
-    created: new Date().toISOString().slice(0, 10)
-  };
-
-  admins.push(newAdmin);
-  saveAdmins(admins);
+  const { error } = await sb.rpc('grant_admin', { p_email:email, p_name:name, p_role:role });
+  if(error) return toast(adminErrorText(error), 'error');
+  document.getElementById('new-adm-name').value = '';
+  document.getElementById('new-adm-user').value = '';
+  toast(`✓ ${name} now has admin access`);
   renderAdminList();
-
-  if(document.getElementById('new-adm-name')) document.getElementById('new-adm-name').value = '';
-  if(document.getElementById('new-adm-user')) document.getElementById('new-adm-user').value = '';
-  if(document.getElementById('new-adm-pass')) document.getElementById('new-adm-pass').value = '';
-
-  alert(`Administrator account for "${name}" created successfully! They can now sign in with username "${user}".`);
 }
 
-function deleteAdmin(adminId){
-  if(!currentAdmin || currentAdmin.role !== 'super') return;
-  const admins = getAdmins();
-  const target = admins.find(a => a.id === adminId);
-  if(!target) return;
-  if(!confirm(`Are you sure you want to remove administrator "${target.name}"?`)) return;
+async function changeCurrentAdminPassword(){
+  const input = document.getElementById('change-adm-newpass');
+  const msg = document.getElementById('change-pass-msg');
+  const newPass = input.value;
+  const showMsg = (text, color)=>{ msg.style.display = 'block'; msg.style.color = color; msg.textContent = text; };
+  if(newPass.length < 8) return showMsg('Password must be at least 8 characters long.', 'var(--red)');
+  const { error } = await sb.auth.updateUser({ password:newPass });
+  if(error) return showMsg(error.message, 'var(--red)');
+  input.value = '';
+  showMsg('✓ Password updated successfully!', 'var(--green)');
+  setTimeout(()=>{ msg.style.display = 'none'; }, 4000);
+}
 
-  const filtered = admins.filter(a => a.id !== adminId);
-  saveAdmins(filtered);
+async function deleteAdmin(userId, name){
+  if(!currentAdmin || currentAdmin.role !== 'super') return;
+  if(!confirm(`Remove admin access for "${name}"? Their account itself is not deleted.`)) return;
+  const { error } = await sb.rpc('revoke_admin', { p_user_id:userId });
+  if(error) return toast(adminErrorText(error), 'error');
   renderAdminList();
 }
 
@@ -2325,17 +2302,10 @@ const DEFAULT_CONTACT_CONFIG = {
 };
 
 function getContactConfig(){
-  try {
-    const raw = localStorage.getItem('topik_contact_config');
-    if(raw){
-      const parsed = JSON.parse(raw);
-      return { ...DEFAULT_CONTACT_CONFIG, ...parsed };
-    }
-  } catch(e){}
-  return DEFAULT_CONTACT_CONFIG;
+  return { ...DEFAULT_CONTACT_CONFIG, ...contactConfigCache };
 }
 
-function saveContactConfig(){
+async function saveContactConfig(){
   const cfg = {
     email: document.getElementById('cfg-contact-email')?.value.trim() || DEFAULT_CONTACT_CONFIG.email,
     phone: document.getElementById('cfg-contact-phone')?.value.trim() || DEFAULT_CONTACT_CONFIG.phone,
@@ -2346,11 +2316,12 @@ function saveContactConfig(){
     kakaotalk: document.getElementById('cfg-contact-kakaotalk')?.value.trim() || DEFAULT_CONTACT_CONFIG.kakaotalk
   };
   try {
-    localStorage.setItem('topik_contact_config', JSON.stringify(cfg));
-    alert('Contact channels and social media information updated successfully!');
+    await saveSetting('contact_config', cfg);
+    contactConfigCache = cfg;
+    toast('✓ Contact details updated for everyone');
     renderContactPage();
   } catch(e){
-    alert('Failed to save contact settings: ' + e.message);
+    toast('Failed to save contact settings: ' + e.message, 'error');
   }
 }
 
@@ -2376,49 +2347,49 @@ function renderContactPage(){
       <div class="contact-icon">✉️</div>
       <div>
         <div class="contact-label">Official Inquiries &amp; Support</div>
-        <div class="contact-value"><a href="mailto:${cfg.email}">${cfg.email}</a></div>
+        <div class="contact-value"><a href="${esc(safeUrl('mailto:' + cfg.email))}">${esc(cfg.email)}</a></div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">📞</div>
       <div>
         <div class="contact-label">Telephone</div>
-        <div class="contact-value"><a href="tel:${cfg.phone.replace(/[^0-9+]/g,'')}">${cfg.phone}</a></div>
+        <div class="contact-value"><a href="tel:${cfg.phone.replace(/[^0-9+]/g,'')}">${esc(cfg.phone)}</a></div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">🏫</div>
       <div>
         <div class="contact-label">Campus &amp; Department Location</div>
-        <div class="contact-value">${cfg.office}</div>
+        <div class="contact-value">${esc(cfg.office)}</div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">🌐</div>
       <div>
         <div class="contact-label">Official Website</div>
-        <div class="contact-value"><a href="${cfg.website}" target="_blank" rel="noopener noreferrer">${cfg.website}</a></div>
+        <div class="contact-value"><a href="${esc(safeUrl(cfg.website))}" target="_blank" rel="noopener noreferrer">${esc(cfg.website)}</a></div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">📸</div>
       <div>
         <div class="contact-label">Instagram</div>
-        <div class="contact-value"><a href="${cfg.instagram.startsWith('http') ? cfg.instagram : 'https://instagram.com/' + cfg.instagram.replace('@','')}" target="_blank" rel="noopener noreferrer">${cfg.instagram}</a></div>
+        <div class="contact-value"><a href="${esc(safeUrl(cfg.instagram.startsWith('http') ? cfg.instagram : 'https://instagram.com/' + encodeURIComponent(cfg.instagram.replace('@',''))))}" target="_blank" rel="noopener noreferrer">${esc(cfg.instagram)}</a></div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">▶️</div>
       <div>
         <div class="contact-label">YouTube Channel</div>
-        <div class="contact-value"><a href="${cfg.youtube}" target="_blank" rel="noopener noreferrer">${cfg.youtube}</a></div>
+        <div class="contact-value"><a href="${esc(safeUrl(cfg.youtube))}" target="_blank" rel="noopener noreferrer">${esc(cfg.youtube)}</a></div>
       </div>
     </div>
     <div class="contact-item">
       <div class="contact-icon">💬</div>
       <div>
         <div class="contact-label">KakaoTalk Community</div>
-        <div class="contact-value">${cfg.kakaotalk}</div>
+        <div class="contact-value">${esc(cfg.kakaotalk)}</div>
       </div>
     </div>
   `;
@@ -2428,35 +2399,34 @@ function renderContactPage(){
 async function renderAdminDashboard(){
   if(!currentAdmin) return;
   const [studentsRaw, progRaw, failRaw] = await Promise.all([
-    sbFetch('/rest/v1/students?select=*&limit=500'),
-    sbFetch('/rest/v1/progress?select=*&limit=3000'),
-    sbFetch('/rest/v1/fail_words?select=*&limit=3000')
+    fetchAll('students'),
+    fetchAll('progress'),
+    fetchAll('fail_words', 'word_kr')
   ]);
 
-  const localStudents = getCachedStudents();
   const merged = {};
-  localStudents.forEach(s=>{ merged[s.sid] = {...s}; });
-  (studentsRaw||[]).forEach(s=>{
-    const key = s.student_id;
-    merged[key] = {
-      sid: key,
+  studentsRaw.forEach(s=>{
+    merged[s.student_id] = {
+      sid: s.student_id,
       name: s.name||'',
       nick: s.nickname||'',
-      cohort: s.cohort || merged[key]?.cohort || getActiveCohort().id,
+      email: s.email||'',
+      registered: !!s.user_id,
+      cohort: s.cohort || '',
       lastSeen: s.last_seen||'',
-      words: merged[key]?.words||0,
-      levels: merged[key]?.levels||0,
-      examPassed: merged[key]?.examPassed||false,
-      examScore: merged[key]?.examScore||0
+      words: 0, levels: 0, examPassed: false, examScore: 0, examDate: ''
     };
   });
 
   const progressMap = {};
-  (progRaw||[]).forEach(p=>{
+  progRaw.forEach(p=>{
     if(!progressMap[p.student_id]) progressMap[p.student_id] = {words:0,levels:0,examPassed:false,examScore:0};
     if(p.level_key==='final_exam'){
       if(p.completed) progressMap[p.student_id].examPassed = true;
-      if((p.score_pct||0) > progressMap[p.student_id].examScore) progressMap[p.student_id].examScore = p.score_pct;
+      if((p.score_pct||0) > progressMap[p.student_id].examScore){
+        progressMap[p.student_id].examScore = p.score_pct;
+        progressMap[p.student_id].examDate = p.updated_at;
+      }
     } else {
       progressMap[p.student_id].words += (p.correct||0);
       if(p.completed) progressMap[p.student_id].levels++;
@@ -2468,13 +2438,14 @@ async function renderAdminDashboard(){
       merged[sid].levels = progressMap[sid].levels;
       merged[sid].examPassed = progressMap[sid].examPassed;
       merged[sid].examScore = progressMap[sid].examScore;
+      merged[sid].examDate = progressMap[sid].examDate || '';
     }
   });
 
   adminCachedStudents = Object.values(merged);
 
   const failWordMap = {};
-  (failRaw||[]).forEach(f=>{ failWordMap[f.word_kr] = (failWordMap[f.word_kr]||0)+1; });
+  failRaw.forEach(f=>{ failWordMap[f.word_kr] = (failWordMap[f.word_kr]||0)+1; });
 
   const cohorts = getCohorts();
   const activeCohort = getActiveCohort();
@@ -2499,7 +2470,7 @@ async function renderAdminDashboard(){
       const pct = totalStudents > 0 ? Math.round(count/totalStudents*100) : 0;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div>
-          <span class="cohort-badge ${c.active?'current':'alumni'}">${c.name.replace(' (Current)','')}</span>
+          <span class="cohort-badge ${c.active?'current':'alumni'}">${esc(c.name.replace(' (Current)',''))}</span>
           ${c.active ? '<span style="font-size:9px;color:var(--gold);margin-left:4px">★ Current</span>' : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -2522,7 +2493,7 @@ async function renderAdminDashboard(){
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:10px;color:rgba(255,255,255,0.3);width:16px;text-align:right">${i+1}</span>
-            <span style="font-family:'Noto Sans KR',sans-serif;font-size:13px;color:#fff;font-weight:600">${w}</span>
+            <span style="font-family:'Noto Sans KR',sans-serif;font-size:13px;color:#fff;font-weight:600">${esc(w)}</span>
             ${wObj ? `<span style="font-size:11px;color:rgba(255,255,255,0.45)">${wObj.e}</span>` : ''}
           </div>
           <span style="font-size:11px;font-weight:700;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 7px;border-radius:10px">${cnt} fails</span>
@@ -2570,13 +2541,13 @@ function renderAdminStudents(){
       ? `<span style="color:#22c55e;font-weight:700">✓ ${s.examScore}%</span>`
       : (s.examScore>0 ? `<span style="color:#f59e0b">Fail ${s.examScore}%</span>` : '<span style="color:rgba(255,255,255,0.3)">—</span>');
     return `<tr>
-      <td style="font-family:monospace;font-size:11px">${s.sid||'—'}</td>
-      <td><div>${s.name||'—'}</div>${s.nick?`<div style="font-size:10px;color:rgba(255,255,255,0.4)">${s.nick}</div>`:''}</td>
-      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${cName}</span></td>
+      <td style="font-family:monospace;font-size:11px">${esc(s.sid||'—')}</td>
+      <td><div>${esc(s.name||'—')}</div>${s.nick?`<div style="font-size:10px;color:rgba(255,255,255,0.4)">${esc(s.nick)}</div>`:''}</td>
+      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${esc(cName)}</span></td>
       <td style="text-align:center;font-weight:700;color:var(--sky)">${(s.words||0).toLocaleString()}</td>
       <td style="text-align:center">${s.levels||0}</td>
       <td>${examCell}</td>
-      <td>${s.examPassed?`<button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert('${s.sid}')">📜 Cert</button>`:'—'}</td>
+      <td>${s.examPassed?`<button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert(${esc(JSON.stringify(s.sid))})">📜 Cert</button>`:'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -2589,12 +2560,12 @@ function renderAdminCohorts(){
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,${c.active?'0.18':'0.06'});margin-bottom:6px">
       <div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-          <span class="cohort-badge ${c.active?'current':'alumni'}">${c.name.replace(' (Current)','')}</span>
+          <span class="cohort-badge ${c.active?'current':'alumni'}">${esc(c.name.replace(' (Current)',''))}</span>
           ${c.active ? '<span style="font-size:10px;color:var(--gold)">★ Active</span>' : ''}
         </div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Code: <strong>${c.id}</strong> · ${c.semester} ${c.year}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Code: <strong>${esc(c.id)}</strong> · ${esc(c.semester)} ${esc(c.year)}</div>
       </div>
-      <button class="btn-rg" style="padding:5px 12px;font-size:10px;border-radius:14px;background:${c.active?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.15)'};color:${c.active?'#ef4444':'#22c55e'};border:1px solid currentColor" onclick="toggleCohortActive('${c.id}')">
+      <button class="btn-rg" style="padding:5px 12px;font-size:10px;border-radius:14px;background:${c.active?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.15)'};color:${c.active?'#ef4444':'#22c55e'};border:1px solid currentColor" onclick="toggleCohortActive(${esc(JSON.stringify(c.id))})">
         ${c.active ? 'Deactivate' : 'Set Active'}
       </button>
     </div>`).join('');
@@ -2618,58 +2589,51 @@ function renderAdminCerts(){
     const isCur = cObj ? cObj.active : false;
     const isAdv = (s.examScore||0) >= (certCfg.honorsPct || 95);
     return `<tr>
-      <td style="font-family:monospace;font-size:11px">${s.sid||'—'}</td>
-      <td><strong>${s.name||'—'}</strong>${s.nick?` <span style="font-size:10px;color:rgba(255,255,255,0.4)">(${s.nick})</span>`:''}</td>
-      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${cName}</span></td>
+      <td style="font-family:monospace;font-size:11px">${esc(s.sid||'—')}</td>
+      <td><strong>${esc(s.name||'—')}</strong>${s.nick?` <span style="font-size:10px;color:rgba(255,255,255,0.4)">(${esc(s.nick)})</span>`:''}</td>
+      <td><span class="cohort-badge ${isCur?'current':'alumni'}" style="font-size:10px">${esc(cName)}</span></td>
       <td style="text-align:center;font-weight:700;color:${isAdv?'#D4A017':'#22c55e'}">${s.examScore||0}%</td>
       <td>${isAdv ? '🏅 Advanced' : '✓ Standard'}</td>
-      <td style="font-size:10px;color:rgba(255,255,255,0.5)">${certCfg.sigName}</td>
-      <td><button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert('${s.sid}')">📜 Preview</button></td>
+      <td style="font-size:10px;color:rgba(255,255,255,0.5)">${esc(certCfg.sigName)}</td>
+      <td><button class="btn-rg" style="padding:4px 10px;font-size:10px;border-radius:14px" onclick="viewStudentCert(${esc(JSON.stringify(s.sid))})">📜 Preview</button></td>
     </tr>`;
   }).join('');
 }
 
-function addNewCohort(){
+async function addNewCohort(){
   const name = (document.getElementById('new-cohort-name')?.value||'').trim();
   const id   = (document.getElementById('new-cohort-id')?.value||'').trim();
   const year = parseInt(document.getElementById('new-cohort-year')?.value||'2026',10);
   const setActive = document.getElementById('new-cohort-active')?.checked ?? true;
-  if(!name || !id){ alert('Please fill in Semester Title and Cohort Code.'); return; }
-  const cohorts = getCohorts();
-  if(cohorts.find(c=>c.id===id)){ alert(`Code "${id}" already exists.`); return; }
-  if(setActive){ cohorts.forEach(c=>{ c.active=false; c.name=c.name.replace(' (Current)',''); }); }
+  if(!name || !id){ toast('Please fill in Semester Title and Cohort Code.', 'error'); return; }
+  if(getCohorts().find(c=>c.id===id)){ toast(`Code "${id}" already exists.`, 'error'); return; }
   const semester = id.endsWith('-1')?'Spring':id.endsWith('-2')?'Fall':name;
-  cohorts.unshift({ id, name: name+(setActive?' (Current)':''), semester, year, active:setActive });
-  saveCohorts(cohorts);
-  populateCohortSelects();
-  renderAdminCohorts();
-  if(document.getElementById('new-cohort-name')) document.getElementById('new-cohort-name').value='';
-  if(document.getElementById('new-cohort-id'))   document.getElementById('new-cohort-id').value='';
-  const statActiveCohort = document.getElementById('adm-stat-active-cohort');
-  if(statActiveCohort && setActive) statActiveCohort.textContent = name;
-  const msg = document.createElement('div');
-  msg.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;font-weight:700;font-size:13px;padding:10px 22px;border-radius:30px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
-  msg.textContent = `✓ Cohort "${name}" created!`;
-  document.body.appendChild(msg);
-  setTimeout(()=>msg.remove(), 2500);
+  const { error } = await sb.from('cohorts').insert({ id, name, semester, year, active:false });
+  if(error){ toast('Could not create cohort: ' + error.message, 'error'); return; }
+  if(setActive){
+    const { error:actErr } = await sb.rpc('set_active_cohort', { p_id:id });
+    if(actErr) toast('Cohort created, but could not make it active: ' + actErr.message, 'error');
+  }
+  await refreshCohortViews();
+  document.getElementById('new-cohort-name').value='';
+  document.getElementById('new-cohort-id').value='';
+  toast(`✓ Cohort "${name}" created!`);
 }
 
-function toggleCohortActive(id){
-  const cohorts = getCohorts();
-  const target = cohorts.find(c=>c.id===id);
+async function toggleCohortActive(id){
+  const target = getCohorts().find(c=>c.id===id);
   if(!target) return;
-  if(!target.active){
-    cohorts.forEach(c=>{ c.active=(c.id===id); c.name=c.name.replace(' (Current)',''); });
-    target.name += ' (Current)';
-  } else {
-    target.active = false;
-    target.name = target.name.replace(' (Current)','');
-  }
-  saveCohorts(cohorts);
+  const { error } = await sb.rpc('set_active_cohort', { p_id: target.active ? null : id });
+  if(error){ toast('Could not change the active cohort: ' + error.message, 'error'); return; }
+  await refreshCohortViews();
+}
+
+async function refreshCohortViews(){
+  await loadCohorts();
   populateCohortSelects();
   renderAdminCohorts();
   const statActiveCohort = document.getElementById('adm-stat-active-cohort');
-  if(statActiveCohort) statActiveCohort.textContent = getActiveCohort().name.replace(' (Current)','');
+  if(statActiveCohort) statActiveCohort.textContent = getActiveCohort().name || '—';
 }
 
 function viewStudentCert(sid){
@@ -2677,7 +2641,7 @@ function viewStudentCert(sid){
   if(!s || !s.examPassed) return;
   const cfg = getCertConfig();
   const advanced = (s.examScore||0) >= (cfg.honorsPct || 95);
-  const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const dateStr = (s.examDate ? new Date(s.examDate) : new Date()).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const cohortObj = getCohorts().find(c=>c.id===s.cohort);
   const cohortName = cohortObj ? cohortObj.name.replace(' (Current)','') : (s.cohort||'2026 Spring');
   document.getElementById('cert-level-badge').textContent = advanced ? '🏅 ADVANCED LEVEL 2 CERTIFICATE' : '📜 TOPIK I CERTIFICATE';
@@ -2687,7 +2651,7 @@ function viewStudentCert(sid){
 }
 
 function exportStudentsCSV(){
-  if(!adminCachedStudents.length){ alert('No data to export. Open Overview first.'); return; }
+  if(!adminCachedStudents.length){ toast('No data to export yet. Open Overview first.', 'error'); return; }
   const cohorts = getCohorts();
   const cohortMap = {};
   cohorts.forEach(c=>cohortMap[c.id]=c);
@@ -2719,51 +2683,40 @@ if(typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof lo
 }
 
 // ── INIT ──
-load();
 async function initApp(){
-  const splashEl = typeof document !== 'undefined' ? document.getElementById('splash') : null;
-  const pfill = splashEl ? document.getElementById('splash-pfill') : null;
-  const pstat = splashEl ? document.getElementById('splash-status') : null;
+  const pfill = document.getElementById('splash-pfill');
+  const pstat = document.getElementById('splash-status');
+  show('splash');
+  if(pfill) pfill.style.width = '35%';
 
-  if(splashEl){
-    show('splash');
-    if(pfill) pfill.style.width = '35%';
-  }
+  // Shared data (cohorts, certificate & contact settings) + the current session, all from the database
+  const [, , sessionRes] = await Promise.all([loadCohorts(), loadSettings(), sb.auth.getSession()]);
+  if(pfill) pfill.style.width = '75%';
+  if(pstat) pstat.textContent = 'Preparing TOPIK I Modules & Audio...';
 
-  if(g.user.sid){
-    dbUpdateLastSeen(g.user.sid);
-    const dbFails = await dbLoadMyFails(g.user.sid);
-    if(dbFails && dbFails.length > 0){
-      dbFails.forEach(f=>{
-        if(!g.fails.find(x=>x.w===f.word_kr)){
-          g.fails.push({w:f.word_kr, e:f.word_en, t:f.word_type||'명사'});
-        }
-      });
-      save();
-    }
-  }
+  const session = sessionRes.data.session;
+  if(session) await loadMyData();
   initHome();
 
-  const proceedToTarget = () => {
-    if(!g.user.name && !localStorage.getItem('topik_skip')){
-      show('intro');
-    } else {
-      show('home');
-    }
-  };
+  if(pfill) pfill.style.width = '100%';
+  if(pstat) pstat.textContent = 'Welcome to Vocab-King! 👑';
 
-  if(splashEl && typeof setTimeout !== 'undefined'){
-    setTimeout(()=>{
-      if(pfill) pfill.style.width = '75%';
-      if(pstat) pstat.textContent = 'Preparing TOPIK I Modules & Audio...';
-      setTimeout(()=>{
-        if(pfill) pfill.style.width = '100%';
-        if(pstat) pstat.textContent = 'Welcome to Vocab-King! 👑';
-        setTimeout(proceedToTarget, 350);
-      }, 400);
-    }, 450);
-  } else {
-    proceedToTarget();
-  }
+  setTimeout(()=>{
+    if(passwordRecovery){
+      show('register'); switchTab('newpass');
+    } else if(AUTH_REDIRECT.error){
+      show('register'); switchTab('login');
+      setMsg('login-err', AUTH_REDIRECT.error + ' — please try again or request a new link.');
+      history.replaceState(null, '', appUrl());
+    } else if(session){
+      if(AUTH_REDIRECT.type === 'signup'){
+        toast('✓ Email verified — welcome to Vocab-King!');
+        history.replaceState(null, '', appUrl());
+      }
+      show('home');
+    } else {
+      show('intro');
+    }
+  }, 350);
 }
 initApp();
